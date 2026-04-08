@@ -17,7 +17,7 @@ describe('ChatService', () => {
   let module: TestingModule;
 
   beforeEach(async () => {
-    // Garante mocks limpos antes de cada teste
+
     jest.clearAllMocks();
     mockGroqService.askGroq.mockResolvedValue('Mocked IASYS response');
     mockMachineService.interpretMessage.mockResolvedValue(['Machine response']);
@@ -32,7 +32,7 @@ describe('ChatService', () => {
 
     service = module.get<ChatService>(ChatService);
 
-    // Limpa o setInterval para não vazar entre testes
+
     clearInterval((service as any).cleanupInterval);
   });
 
@@ -40,9 +40,7 @@ describe('ChatService', () => {
     await module.close();
   });
 
-  // ---------------------------------------------------------------------------
-  // handleMessageAsGenAIChatbot
-  // ---------------------------------------------------------------------------
+
   describe('handleMessageAsGenAIChatbot', () => {
     it('deve retornar reply e histórico após mensagem do usuário', async () => {
       const sessionId = 'test-session-1';
@@ -105,7 +103,6 @@ describe('ChatService', () => {
       const sessionId = 'trim-session';
       service.stateSystemAsGenAIChatbot(sessionId);
 
-      // 10 chamadas = 10 user + 10 assistant = 20 (no limite)
       for (let i = 0; i < 10; i++) {
         await service.handleMessageAsGenAIChatbot({
           sessionId,
@@ -113,7 +110,6 @@ describe('ChatService', () => {
         });
       }
 
-      // 11ª chamada gera 22 mensagens não-system → trim reduz para 20
       const { history } = await service.handleMessageAsGenAIChatbot({
         sessionId,
         message: 'mensagem extra',
@@ -144,9 +140,6 @@ describe('ChatService', () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // handleMessage (via MachineService)
-  // ---------------------------------------------------------------------------
   describe('handleMessage', () => {
     it('deve criar nova sessão e acionar getOrCreateActor quando sessionId não existe', async () => {
       const result = await service.handleMessage({
@@ -170,7 +163,6 @@ describe('ChatService', () => {
       await service.handleMessage({ sessionId, message: 'primeira' });
       await service.handleMessage({ sessionId, message: 'segunda' });
 
-      // getOrCreateActor só deve ter sido chamado uma vez (na criação da sessão)
       expect(mockMachineService.getOrCreateActor).toHaveBeenCalledTimes(1);
     });
 
@@ -233,9 +225,6 @@ describe('ChatService', () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // cleanExpiredSessions
-  // ---------------------------------------------------------------------------
   describe('cleanExpiredSessions', () => {
     it('deve remover sessões inativas além do TTL', async () => {
       const sessionId = 'expired-session';
@@ -243,7 +232,6 @@ describe('ChatService', () => {
 
       await service.handleMessageAsGenAIChatbot({ sessionId, message: 'oi' });
 
-      // Simula sessão expirada (31 minutos atrás)
       (service as any).conversations[sessionId].lastActivity =
         Date.now() - 31 * 60 * 1000;
 
