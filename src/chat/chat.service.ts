@@ -5,13 +5,40 @@ import { ChatMessage } from './chat.types';
 import { v4 as uuidv4 } from 'uuid';
 import { MachineService } from 'src/machine/machine.service';
 
-const MAX_MESSAGES_PER_SESSION = 20; 
-const SESSION_TTL_MS = 30 * 60 * 1000; 
+const MAX_MESSAGES_PER_SESSION = 20;
+const SESSION_TTL_MS = 30 * 60 * 1000;
 
 interface ConversationSession {
   messages: ChatMessage[];
-  lastActivity: number; 
+  lastActivity: number;
 }
+
+const AGENT_SYSTEM_PROMPTS: Record<number, string> = {
+  1: `Seu nome é IASYS. Você deve falar em Português.
+      Você é um assistente especializado em informações de saúde pública,
+      participando do projeto PET Saúde Digital em Petrolina.
+      Responda dúvidas sobre saúde, sintomas, orientações médicas gerais e serviços de saúde disponíveis.
+      Seja humilde e carismático, mas não se gabe disso.`,
+
+  2: `Seu nome é IASYS. Você deve falar em Português.
+      Você é um assistente especializado em agendamento de consultas e exames
+      no projeto PET Saúde Digital em Petrolina.
+      Auxilie o usuário a agendar, remarcar ou cancelar consultas e exames.
+      Seja humilde e carismático, mas não se gabe disso.`,
+
+  3: `Seu nome é IASYS. Você deve falar em Português.
+      Você é um assistente especializado em informações sobre medicamentos e farmácias
+      no projeto PET Saúde Digital em Petrolina.
+      Oriente sobre posologia, disponibilidade de medicamentos e farmácias populares.
+      Seja humilde e carismático, mas não se gabe disso.`,
+
+  4: `Seu nome é IASYS. Você deve falar em Português.
+      Você é um assistente de uso geral do projeto PET Saúde Digital em Petrolina,
+      pronto para ajudar com dúvidas diversas sobre o sistema e serviços disponíveis.
+      Seja humilde e carismático, mas não se gabe disso.`,
+};
+
+const DEFAULT_AGENT_ID = 4;
 
 @Injectable()
 export class ChatService {
@@ -22,7 +49,6 @@ export class ChatService {
     private readonly groqService: GroqService,
     private readonly machineService: MachineService,
   ) {
-    
     this.cleanupInterval = setInterval(
       () => this.cleanExpiredSessions(),
       10 * 60 * 1000,
@@ -52,10 +78,20 @@ export class ChatService {
     return messages;
   }
 
-  private createConversationHistory(sessionId: string) {
+  private getSystemPrompt(agentId?: number): string {
+    const id = agentId && AGENT_SYSTEM_PROMPTS[agentId] ? agentId : DEFAULT_AGENT_ID;
+    return AGENT_SYSTEM_PROMPTS[id];
+  }
+
+  private createConversationHistory(sessionId: string, agentId?: number): void {
     if (!this.conversations[sessionId]) {
       this.conversations[sessionId] = {
-        messages: [],
+        messages: [
+          {
+            role: 'system',
+            content: this.getSystemPrompt(agentId),
+          },
+        ],
         lastActivity: Date.now(),
       };
       this.machineService.getOrCreateActor(sessionId);
@@ -67,7 +103,7 @@ export class ChatService {
     history: ChatMessage[];
   }> {
     const sessionId = dto.sessionId || uuidv4();
-    this.createConversationHistory(sessionId);
+    this.createConversationHistory(sessionId, dto.agentId);
 
     const session = this.conversations[sessionId];
     session.lastActivity = Date.now();
@@ -93,9 +129,7 @@ export class ChatService {
         messages: [
           {
             role: 'system',
-            content: `Seu nome é IASYS. Você deve falar em Português.
-              Você é um assistente prestativo, que está participando do projeto PET Saúde Digital, cujo objetivo é assistir à Saúde Pública em Petrolina. 
-              Seja humilde e carismático ao falar, mas não se gabe disso.`,
+            content: this.getSystemPrompt(DEFAULT_AGENT_ID),
           },
         ],
         lastActivity: Date.now(),
@@ -120,7 +154,6 @@ export class ChatService {
     }
 
     session.messages.push({ role: 'assistant', content: response });
-
     session.messages = this.trimHistory(session.messages);
 
     return { reply: response, history: session.messages };

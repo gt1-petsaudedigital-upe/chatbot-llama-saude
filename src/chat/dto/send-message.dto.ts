@@ -5,6 +5,7 @@ export class SendMessageDTO {
   @ApiProperty({ description: 'Mensagem do usuário' })
   @IsString()
   message: string;
+  agentId?: number;
 
   @ApiPropertyOptional({
     description: 'ID da sessão. Se não informado, será gerado automaticamente.',

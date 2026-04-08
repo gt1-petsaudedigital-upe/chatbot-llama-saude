@@ -24,4 +24,22 @@ export class ChatController {
       return { replies: ['Desculpe, houve um erro no servidor.'], history: [] };
     }
   }
+
+  @Post('message')
+  async sendMessageWithAgent(
+    @Body() body: { agentId: number; message: string; history: ChatMessage[] },
+  ): Promise<{
+    replies: string[];
+    history: ChatMessage[];
+  }> {
+    try {
+      const result = await this.chatService.handleMessage({
+        ...body,
+        agentId: body.agentId,
+      } as SendMessageDTO);
+      return result;
+    } catch (error) {
+      return { replies: ['Desculpe, houve um erro no servidor.'], history: [] };
+    }
+  }
 }
