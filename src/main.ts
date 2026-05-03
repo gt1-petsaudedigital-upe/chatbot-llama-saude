@@ -6,28 +6,21 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // app.useStaticAssets(join(__dirname, '..', 'public')); // CSS, JS, imagens
-
-  // app.use((req, res, next) => {
-  //   if (req.path === '/') {
-  //     res.sendFile(join(__dirname, '..', 'public', 'index.html'));
-  //   } else {
-  //     next();
-  //   }
-  // });
-
   const port = process.env.PORT || 3000;
   const url = process.env.WEB_URL || `http://localhost:${port}/`;
   const swagger = `http://localhost:${port}/api`;
 
   app.enableCors({
-    origin: ['https://chat-iasys.netlify.app'],
+    origin: [
+      'https://chat-iasys.netlify.app',
+      'https://pet-saude-dev.github.io',
+      `http://localhost:${port}`,
+    ],
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   });
 
-  // Configuração do Swagger
   const config = new DocumentBuilder()
     .setTitle('Chatbot Llama API')
     .setDescription('Chatbot Llama entregável para o PET Saúde Digital')
@@ -41,7 +34,6 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`Servidor rodando em ${url}`);
   console.log(`Swagger disponível em ${swagger}`);
-  // await open(swagger);
 }
 
 bootstrap();
