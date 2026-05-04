@@ -48,14 +48,25 @@ export class MachineService {
     return responses;
   }
 
+  private normalize(input: string): string {
+    return input
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
   private mapInputToEvent(input: string, lastState: string): string | null {
     this.logger.log('Classifying the event type to send for the machine');
     const trimmed = input.trim().toLowerCase();
+    const normalized = this.normalize(input);
+
     if (lastState === 'menu') {
       if (
         trimmed === '1' ||
         trimmed.includes('problema') ||
-        trimmed.includes('saúde')
+        trimmed.includes('saúde') ||
+        normalized.includes('saude')
       ) {
         return 'HEALTH_ISSUE_INFORM';
       }
@@ -69,11 +80,14 @@ export class MachineService {
       if (
         trimmed === '3' ||
         trimmed.includes('orientações') ||
-        trimmed.includes('rápidas')
+        normalized.includes('orientacoes') ||
+        trimmed.includes('rápidas') ||
+        normalized.includes('rapidas')
       ) {
         return 'QUICK_GUIDANCE';
       }
     }
+
     if (lastState === 'schedule_appointment_flow') {
       if (trimmed === '1' || trimmed.includes('agendar')) {
         return 'SCHEDULE';
@@ -82,11 +96,12 @@ export class MachineService {
         return 'VERIFY';
       }
     }
+
     if (lastState === 'quick_guidance_flow') {
       if (
         trimmed === '1' ||
         trimmed.includes('vacinação') ||
-        trimmed.includes('vacinacao')
+        normalized.includes('vacinacao')
       ) {
         return 'VACCINATION_FLOW';
       }
@@ -99,23 +114,29 @@ export class MachineService {
       }
       if (
         trimmed === '3' ||
-        trimmed.includes('situacoes') ||
         trimmed.includes('situações') ||
-        trimmed.includes('urgencia') ||
-        trimmed.includes('urgência')
+        normalized.includes('situacoes') ||
+        trimmed.includes('urgência') ||
+        normalized.includes('urgencia')
       ) {
         return 'URGENCY_SITUATION_FLOW';
       }
     }
-    if (trimmed === 'sim' || trimmed === 's') {
+
+    const YES_VARIANTS = ['sim', 's', 'si', 'yes', 'y', 'claro', 'quero', 'afirmativo', 'com certeza', 'pode ser'];
+    const NO_VARIANTS = ['nao', 'n', 'no', 'negativo', 'nao quero', 'nao quero'];
+
+    if (YES_VARIANTS.includes(normalized) || YES_VARIANTS.some(v => normalized.startsWith(v))) {
       return 'YES';
     }
-    if (trimmed === 'não' || trimmed === 'n') {
+    if (NO_VARIANTS.includes(normalized) || NO_VARIANTS.some(v => normalized.startsWith(v))) {
       return 'NO';
     }
-    if (trimmed === 'ajuda') {
+
+    if (normalized === 'ajuda') {
       return 'STILL_NEED_HELP';
     }
+
     if (lastState === 'check_user_or_other_person_vaccination') {
       if (trimmed === '2' || trimmed === 'pessoa' || trimmed === 'outra') {
         return 'OTHER_PERSON';
@@ -124,6 +145,7 @@ export class MachineService {
         return 'MYSELF';
       }
     }
+
     if (
       ![
         'HEALTH_ISSUE_INFORM',
@@ -136,11 +158,11 @@ export class MachineService {
     ) {
       return 'USER_INPUT';
     }
+
     return trimmed;
   }
 
   private sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
-
 }
