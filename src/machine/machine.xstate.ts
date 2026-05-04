@@ -1033,7 +1033,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               chosenTime: parsed.chosen_time,
             };
           } catch (err) {
-            throw new Error(err.message);
+            throw new Error(err instanceof Error ? err.message : String(err));
           }
         }),
         scheduleAppointment: fromPromise(async ({ input }: { input: any }) => {
