@@ -3,6 +3,7 @@ import { ChatMessage } from '../chat/chat.types';
 import { GroqService } from 'src/groq/groq.service';
 import { VaccinationData, vacinacao } from 'src/data/vacina.data';
 import { Logger } from '@nestjs/common';
+import { error } from 'console';
 
 interface ChatflowContext {
   userInput: string;
@@ -52,13 +53,11 @@ export const createChatflowMachine = (groqService: GroqService) =>
         },
       },
       states: {
-        // Início do fluxo
         start: {
           always: {
             target: 'collect_name',
           },
         },
-        // Coleta de dados do usuário
         collect_name: {
           on: {
             USER_INPUT: [
@@ -70,8 +69,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 })),
               },
               {
-                // Transição INVÁLIDA (Fallback) - Se a guarda anterior falhar
-                target: 'collect_name', // Permanece no estado
+                target: 'collect_name',
                 actions: assign(({ context }) => ({
                   responses: [
                     ...context.responses,
@@ -111,6 +109,16 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 }),
               ),
             },
+            // Fallback: usuário digitou outra coisa em vez de Sim/Não
+            USER_INPUT: {
+              target: 'validate_name',
+              actions: assign(({ context }) => ({
+                responses: [
+                  ...context.responses,
+                  'Por favor, responda com "Sim" ou "Não" para confirmar seu nome.',
+                ],
+              })),
+            },
           },
         },
         check_if_social_name: {
@@ -121,9 +129,8 @@ export const createChatflowMachine = (groqService: GroqService) =>
             ],
           })),
           on: {
-            // Caso 1: Usuário responde SIM
             YES: {
-              target: 'collect_social_name', // Nome do estado mais claro
+              target: 'collect_social_name',
               actions: assign(({ context }) => ({
                 userInformation: {
                   ...context.userInformation,
@@ -135,14 +142,13 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 ],
               })),
             },
-            // Caso 2: Usuário responde NÃO
             NO: {
-              target: 'collect_birth_date', // Próxima etapa (data de nascimento)
+              target: 'collect_birth_date',
               actions: assign(({ context }) => ({
                 userInformation: {
                   ...context.userInformation,
                   hasSocialName: false,
-                  socialName: '', // Limpa o socialName, garantindo que não tenha lixo.
+                  socialName: '',
                 },
                 responses: [
                   ...context.responses,
@@ -150,7 +156,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 ],
               })),
             },
-            // Caso 3: Fallback (Usuário não digita Sim ou Não, mas sim outra coisa)
             USER_INPUT: {
               target: 'check_if_social_name',
               actions: assign(({ context }) => ({
@@ -168,20 +173,18 @@ export const createChatflowMachine = (groqService: GroqService) =>
               ...context.responses,
               'Entendido. Por favor, digite seu Nome Social para que eu possa confirmá-lo.',
             ],
-            userInput: undefined, // Limpa o buffer de input anterior
+            userInput: undefined,
           })),
           on: {
             USER_INPUT: [
               {
                 target: 'validate_social_name',
                 guard: ({ event: { value } }) => value.trim() !== '',
-                // Ação: Armazena o input temporariamente para confirmação
                 actions: assign(({ event }) => ({
                   userInput: event.value,
                 })),
               },
               {
-                // Transição INVÁLIDA (Fallback) - Input vazio
                 target: 'collect_social_name',
                 actions: assign(({ context }) => ({
                   responses: [
@@ -201,9 +204,8 @@ export const createChatflowMachine = (groqService: GroqService) =>
             ],
           })),
           on: {
-            // Caso 1: Usuário quer corrigir
             NO: {
-              target: 'collect_social_name', // Volta para a coleta
+              target: 'collect_social_name',
               actions: assign(({ context: { responses } }) => ({
                 responses: [
                   ...responses,
@@ -211,9 +213,8 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 ],
               })),
             },
-            // Caso 2: Usuário confirma
             YES: {
-              target: 'collect_birth_date', // Próxima etapa
+              target: 'collect_birth_date',
               actions: assign(({ context }) => ({
                 userInformation: {
                   ...context.userInformation,
@@ -226,7 +227,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 userInput: undefined,
               })),
             },
-            // Caso 3: Fallback (Usuário não digita Sim ou Não)
+            // Fallback: usuário digitou outra coisa em vez de Sim/Não
             USER_INPUT: {
               target: 'validate_social_name',
               actions: assign(({ context }) => ({
@@ -244,11 +245,10 @@ export const createChatflowMachine = (groqService: GroqService) =>
               ...context.responses,
               'Agora, por favor, me informe sua **Data de Nascimento** no formato **DD/MM/AAAA** (Ex: 01/01/2000).',
             ],
-            userInput: undefined, // Limpa o buffer de input anterior
+            userInput: undefined,
           })),
           on: {
             USER_INPUT: {
-              // Vai direto para o estado de validação para checar o formato
               target: 'validate_birth_date',
               actions: assign(({ event }) => ({
                 userInput: event.value,
@@ -264,7 +264,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               target: 'confirm_birth_date',
             },
             onError: {
-              target: 'collect_birth_date', // Volta para a coleta
+              target: 'collect_birth_date',
               actions: assign(({ context }) => ({
                 responses: [
                   ...context.responses,
@@ -283,7 +283,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           })),
           on: {
             NO: {
-              target: 'collect_birth_date', // Volta para a coleta
+              target: 'collect_birth_date',
               actions: assign(({ context: { responses } }) => ({
                 responses: [
                   ...responses,
@@ -292,18 +292,18 @@ export const createChatflowMachine = (groqService: GroqService) =>
               })),
             },
             YES: {
-              target: 'collect_cpf', // Próxima etapa (CPF)
+              target: 'collect_cpf',
               actions: assign(
                 ({ context: { responses, userInput, userInformation } }) => ({
                   userInformation: {
                     ...userInformation,
-                    birthDate: userInput, // Salva a data confirmada
+                    birthDate: userInput,
                   },
                   responses: [
                     ...responses,
                     `Data de Nascimento confirmada! Próximo: CPF.`,
                   ],
-                  userInput: undefined, // Limpa o buffer temporário
+                  userInput: undefined,
                 }),
               ),
             },
@@ -324,11 +324,10 @@ export const createChatflowMachine = (groqService: GroqService) =>
               ...context.responses,
               'Agora, por favor, me informe o seu CPF (Cadastro de Pessoas Físicas). \n Você pode digitar apenas os 11 números, ou com pontos e traço (Ex: 123.456.789-00).',
             ],
-            userInput: undefined, // Limpa o buffer de input anterior
+            userInput: undefined,
           })),
           on: {
             USER_INPUT: {
-              // Vai direto para o estado de validação
               target: 'validate_cpf',
               actions: assign(({ event }) => ({
                 userInput: event.value,
@@ -338,20 +337,13 @@ export const createChatflowMachine = (groqService: GroqService) =>
         },
         validate_cpf: {
           invoke: {
-            // 'validateCpf' é o nome do actor que você definirá na configuração da máquina
             src: 'validateCpf',
             input: ({ context: { userInput } }) => userInput,
-
-            // Se a validação for bem-sucedida (CPF válido)
             onDone: {
               target: 'confirm_cpf',
-              // O resultado do actor (o CPF limpo, só números) é guardado no input.data,
-              // mas manteremos o userInput para a confirmação.
             },
-
-            // Se a validação falhar (formato errado, dígitos verificadores incorretos)
             onError: {
-              target: 'collect_cpf', // Volta para a coleta
+              target: 'collect_cpf',
               actions: assign(({ context }) => ({
                 responses: [
                   ...context.responses,
@@ -365,14 +357,12 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context: { responses, userInput } }) => ({
             responses: [
               ...responses,
-              // Exibe o CPF para confirmação. Sugestão: mascarar o CPF se for um requisito de segurança.
               `Você informou o CPF: **${userInput}**. Está correto? (Sim/Não)`,
             ],
           })),
           on: {
-            // Caso 1: Usuário quer corrigir
             NO: {
-              target: 'collect_cpf', // Volta para a coleta
+              target: 'collect_cpf',
               actions: assign(({ context: { responses } }) => ({
                 responses: [
                   ...responses,
@@ -380,22 +370,19 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 ],
               })),
             },
-            // Caso 2: Usuário confirma
             YES: {
-              target: 'collect_sex', // Próxima etapa (SEXO)
+              target: 'collect_sex',
               actions: assign(
                 ({ context: { responses, userInput, userInformation } }) => ({
                   userInformation: {
                     ...userInformation,
-                    // É uma boa prática salvar o CPF limpo (apenas números)
                     cpf: userInput.replace(/[^\d]/g, ''),
                   },
                   responses: [...responses, `CPF confirmado! Próximo: Sexo.`],
-                  userInput: undefined, // Limpa o buffer temporário
+                  userInput: undefined,
                 }),
               ),
             },
-            // Caso 3: Fallback (Usuário não digita Sim ou Não)
             USER_INPUT: {
               target: 'confirm_cpf',
               actions: assign(({ context }) => ({
@@ -414,7 +401,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               'Quase lá! Agora, por favor, informe qual o seu **Sexo** de acordo com as opções abaixo:',
               '1) Feminino\n2) Masculino\n3) Outro\n4) Prefiro não especificar',
             ],
-            userInput: undefined, // Limpa o buffer
+            userInput: undefined,
           })),
           on: {
             USER_INPUT: {
@@ -443,9 +430,8 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 userInput: undefined,
               })),
             },
-            // Se a validação falhar (input inválido)
             onError: {
-              target: 'collect_sex', // Volta para a coleta
+              target: 'collect_sex',
               actions: assign(({ context }) => ({
                 responses: [
                   ...context.responses,
@@ -455,7 +441,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             },
           },
         },
-        // Escolha dos fluxos
         menu: {
           on: {
             HEALTH_ISSUE_INFORM: 'health_issue_inform_flow',
@@ -471,7 +456,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             ],
           })),
         },
-        // Fluxo 1 - Informar um problema de saúde
         health_issue_inform_flow: {
           on: {
             USER_INPUT: {
@@ -529,7 +513,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              `Com base no que você me relatou, você pode tomar algumas preucações ainda em casa: \nLembre-se de Repousar e se hidrate. \nSe os sintomas persistirem ou piorarem, busque a UBS mais próxima de você!`,
+              `Com base no que você me relatou, você pode tomar algumas precauções ainda em casa: \nLembre-se de repousar e se hidrate. \nSe os sintomas persistirem ou piorarem, busque a UBS mais próxima de você!`,
             ],
           })),
           after: {
@@ -551,7 +535,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             },
           },
         },
-        // Fluxo 2 - Agendar procedimento ou consulta
         schedule_appointment_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -682,7 +665,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
           },
         },
         query_appointment: {},
-        // Fluxo 3 - Informações Rápidas
         quick_guidance_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -696,7 +678,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             URGENCY_SITUATION_FLOW: 'urgency_situation_flow',
           },
         },
-        // Subfluxo 3.1 - Vacinação
         vaccination_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -766,7 +747,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
           },
         },
         inform_vaccine: {},
-        // Subfluxo 3.2 - Medidas de Higiene
         hygiene_measures_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -807,7 +787,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             },
           },
         },
-        // Subfluxo 3.3 - Situações de emergência
         urgency_situation_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -851,7 +830,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             },
           },
         },
-        // Fluxo 3 - Incentivo a buscar o SUS
         sus_check: {
           entry: assign(({ context }) => ({
             responses: [
@@ -877,7 +855,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             target: 'redirect_appointment_schedule',
           },
         },
-        // Fluxo 3 - Redirecionamento para consulta
         redirect_appointment_schedule: {
           on: {
             YES: 'schedule_appointment_menu',
@@ -890,7 +867,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             ],
           })),
         },
-        // Retorno ao fluxo inicial
         still_need_help: {
           entry: assign(({ context }) => ({
             responses: [
@@ -904,7 +880,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             NO: 'end_session',
           },
         },
-        // Se houverem erros
         error: {
           after: {
             500: {
@@ -918,7 +893,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             ],
           })),
         },
-        // Finalização da sessão
         end_session: {
           type: 'final',
           entry: assign(({ context }) => ({
@@ -932,9 +906,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
       },
     },
     {
-      // Funções usadas para orquestrar chatbot
       actors: {
-        // Avalia sintomas informados pelo paciente com uso do Llama
         askLlamaForSymptomSeverity: fromPromise(
           async ({ input }: { input: string }) => {
             try {
@@ -964,7 +936,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
             }
           },
         ),
-        // Mapeia o tipo de marcação necessário e (no futuro) pesquisa dias disponíveis
         mapAppointment: fromPromise(async ({ input }: { input: number }) => {
           try {
             let typeOfAppointment: string | null;
@@ -1031,8 +1002,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               '\nQual a sua disponibilidade?';
 
             return { scheduleOptions, typeOfAppointment, response };
-          } catch (err) {
-          }
+          } catch (err) {}
         }),
         extractChosenDate: fromPromise(async ({ input }: { input: any }) => {
           try {
