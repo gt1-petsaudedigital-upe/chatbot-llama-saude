@@ -15,4 +15,8 @@ export interface User {
   address?: UserAddress;
   hasHealthProfessionalName: boolean;
   healthProfessionalName?: string;
+  cep?: string;
+  neighborhood?: string;
+  street?: string;
+  number?: string;
 }

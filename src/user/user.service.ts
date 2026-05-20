@@ -1,90 +1,111 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { UserEntity } from './user.entity';
 import { User } from './user.types';
 
 @Injectable()
 export class UserService {
   private readonly logger = new Logger(UserService.name);
 
-  
-  private users: User[] = [
-    {
-      cpf: '12345678901',
-      name: 'Maria Silva',
-      hasSocialName: false,
-      birthDate: '01/01/1990',
-      sex: 'Feminino',
-      hasHealthProfessionalName: false,
-    },
-    {
-      cpf: '98765432100',
-      name: 'João Santos',
-      hasSocialName: false,
-      birthDate: '15/06/1985',
-      sex: 'Masculino',
-      hasHealthProfessionalName: false,
-    },
-  ];
+  constructor(
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
+  ) {}
 
-  
-  findByCpf(cpf: string): User | undefined {
-    const cleanCpf = cpf.replace(/[^\d]/g, '');
-    return this.users.find((u) => u.cpf === cleanCpf);
+  async findByCpf(cpf: string): Promise<User | undefined> {
+    const clean = cpf.replace(/[^\d]/g, '');
+    const entity = await this.userRepository.findOne({ where: { cpf: clean } });
+    return entity ? this.toUser(entity) : undefined;
   }
 
-  
-  findByName(name: string): User | undefined {
-    return this.users.find((u) =>
+  async findByName(name: string): Promise<User | undefined> {
+    const entities = await this.userRepository.find();
+    const entity = entities.find((u) =>
       u.name.toLowerCase().includes(name.toLowerCase()),
     );
+    return entity ? this.toUser(entity) : undefined;
   }
 
-  
-  findAll(): User[] {
-    return this.users;
+  async findAll(): Promise<User[]> {
+    const entities = await this.userRepository.find();
+    return entities.map(this.toUser);
   }
 
-  
-  create(user: User): User {
-    const existing = this.findByCpf(user.cpf);
+  async create(user: User): Promise<User> {
+    const clean = user.cpf.replace(/[^\d]/g, '');
+    const existing = await this.userRepository.findOne({ where: { cpf: clean } });
+
     if (existing) {
-      throw new Error(`Usuário com CPF ${user.cpf} já cadastrado.`);
+      throw new ConflictException(`Usuário com CPF ${clean} já cadastrado.`);
     }
 
-    const newUser: User = {
+    const entity = this.userRepository.create({
       ...user,
-      cpf: user.cpf.replace(/[^\d]/g, ''), 
+      cpf: clean,
+    });
+
+    const saved = await this.userRepository.save(entity);
+    this.logger.log(`New user created: ${saved.name} (CPF: ${saved.cpf})`);
+    return this.toUser(saved);
+  }
+
+  async update(cpf: string, data: Partial<User>): Promise<User> {
+  const clean = cpf.replace(/[^\d]/g, '');
+  const entity = await this.userRepository.findOne({ where: { cpf: clean } });
+
+  if (!entity) {
+    throw new NotFoundException(`Usuário com CPF ${clean} não encontrado.`);
+  }
+
+  await this.userRepository.update(entity.id, data);
+  const updated = await this.userRepository.findOne({ where: { cpf: clean } });
+  
+  if (!updated) {
+    throw new NotFoundException(`Erro ao buscar usuário atualizado.`);
+  }
+  
+  this.logger.log(`User updated: CPF ${clean}`);
+  return this.toUser(updated);
+}
+
+  async delete(cpf: string): Promise<void> {
+    const clean = cpf.replace(/[^\d]/g, '');
+    const entity = await this.userRepository.findOne({ where: { cpf: clean } });
+
+    if (!entity) {
+      throw new NotFoundException(`Usuário com CPF ${clean} não encontrado.`);
+    }
+
+    await this.userRepository.delete(entity.id);
+    this.logger.log(`User deleted: CPF ${clean}`);
+  }
+
+  // Método interno para o chatbot salvar usuário após coleta de dados
+  async findOrCreate(user: Partial<User>): Promise<User> {
+    const clean = user.cpf?.replace(/[^\d]/g, '');
+    const existing = await this.userRepository.findOne({ where: { cpf: clean } });
+    if (existing) return this.toUser(existing);
+
+    const entity = this.userRepository.create({ ...user, cpf: clean });
+    const saved = await this.userRepository.save(entity);
+    return this.toUser(saved);
+  }
+
+  private toUser(entity: UserEntity): User {
+    return {
+      cpf: entity.cpf,
+      name: entity.name,
+      hasSocialName: entity.hasSocialName,
+      socialName: entity.socialName,
+      birthDate: entity.birthDate,
+      sex: entity.sex,
+      hasHealthProfessionalName: entity.hasHealthProfessionalName,
+      healthProfessionalName: entity.healthProfessionalName,
+      cep: entity.cep,
+      neighborhood: entity.neighborhood,
+      street: entity.street,
+      number: entity.number,
     };
-
-    this.users.push(newUser);
-    this.logger.log(`New user created: ${newUser.name} (CPF: ${newUser.cpf})`);
-    return newUser;
-  }
-
-  
-  update(cpf: string, data: Partial<User>): User {
-    const cleanCpf = cpf.replace(/[^\d]/g, '');
-    const index = this.users.findIndex((u) => u.cpf === cleanCpf);
-
-    if (index === -1) {
-      throw new Error(`Usuário com CPF ${cleanCpf} não encontrado.`);
-    }
-
-    
-    this.users[index] = { ...this.users[index], ...data };
-    this.logger.log(`User updated: CPF ${cleanCpf}`);
-    return this.users[index];
-  }
-
-  
-  delete(cpf: string): void {
-    const cleanCpf = cpf.replace(/[^\d]/g, '');
-    const index = this.users.findIndex((u) => u.cpf === cleanCpf);
-
-    if (index === -1) {
-      throw new Error(`Usuário com CPF ${cleanCpf} não encontrado.`);
-    }
-
-    this.users.splice(index, 1);
-    this.logger.log(`User deleted: CPF ${cleanCpf}`);
   }
 }

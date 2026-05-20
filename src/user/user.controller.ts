@@ -7,44 +7,42 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
-  findAll(): User[] {
+  async findAll(): Promise<User[]> {
     return this.userService.findAll();
   }
 
   @Get(':cpf')
-  findByCpf(@Param('cpf') cpf: string): User | { message: string } {
-    const user = this.userService.findByCpf(cpf);
-    if (!user) {
-      return { message: 'Usuário não encontrado.' };
-    }
+  async findByCpf(@Param('cpf') cpf: string): Promise<User | { message: string }> {
+    const user = await this.userService.findByCpf(cpf);
+    if (!user) return { message: 'Usuário não encontrado.' };
     return user;
   }
 
   @Post()
-  create(@Body() user: User): User | { message: string } {
+  async create(@Body() user: User): Promise<User | { message: string }> {
     try {
-      return this.userService.create(user);
+      return await this.userService.create(user);
     } catch (error: any) {
       return { message: error.message };
     }
   }
 
   @Put(':cpf')
-  update(
+  async update(
     @Param('cpf') cpf: string,
     @Body() data: Partial<User>,
-  ): User | { message: string } {
+  ): Promise<User | { message: string }> {
     try {
-      return this.userService.update(cpf, data);
+      return await this.userService.update(cpf, data);
     } catch (error: any) {
       return { message: error.message };
     }
   }
 
   @Delete(':cpf')
-  delete(@Param('cpf') cpf: string): { message: string } {
+  async delete(@Param('cpf') cpf: string): Promise<{ message: string }> {
     try {
-      this.userService.delete(cpf);
+      await this.userService.delete(cpf);
       return { message: 'Usuário removido com sucesso.' };
     } catch (error: any) {
       return { message: error.message };

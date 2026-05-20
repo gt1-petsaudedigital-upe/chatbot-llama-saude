@@ -26,11 +26,14 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/serve-static": "^5.0.3",
     "@nestjs/swagger": "^11.2.1",
+    "@nestjs/typeorm": "^11.0.1",
     "class-validator": "^0.14.2",
     "groq-sdk": "^0.32.0",
+    "mysql2": "^3.22.3",
     "open": "^10.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "typeorm": "^0.3.29",
     "uuid": "^13.0.0",
     "xstate": "^5.24.0"
   },
@@ -60,20 +63,26 @@
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
-  "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": "src",
-  "testRegex": ".*\\.spec\\.ts$",
-  "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
-  },
-  "transformIgnorePatterns": [
-     "node_modules/(?!(uuid)/)"
-  ],
-  "collectCoverageFrom": ["**/*.(t|j)s"],
-  "coverageDirectory": "../coverage",
-  "testEnvironment": "node",
-  "moduleNameMapper": {
-    "^src/(.*)$": "<rootDir>/$1"
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(uuid)/)"
+    ],
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
+    "coverageDirectory": "../coverage",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1"
+    }
   }
-}
 }
