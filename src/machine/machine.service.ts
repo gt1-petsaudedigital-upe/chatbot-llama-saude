@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createChatflowMachine } from './machine.xstate';
 import { GroqService } from 'src/groq/groq.service';
+import { UserService } from 'src/user/user.service';
 import { ActorRefFrom, createActor } from 'xstate';
 
 type ChatflowActor = ActorRefFrom<ReturnType<typeof createChatflowMachine>>;
@@ -10,12 +11,39 @@ export class MachineService {
   private actors: Record<string, ChatflowActor> = {};
   private logger: Logger = new Logger(MachineService.name);
 
-  constructor(private readonly groqService: GroqService) {}
+  constructor(
+    private readonly groqService: GroqService,
+    private readonly userService: UserService,
+  ) {}
 
-  public getOrCreateActor(sessionId: string): ChatflowActor {
+  public async getOrCreateActor(sessionId: string): Promise<ChatflowActor> {
     if (!this.actors[sessionId]) {
       const machine = createChatflowMachine(this.groqService);
-      this.actors[sessionId] = createActor(machine).start();
+      const actor = createActor(machine).start();
+
+      // Busca o usuário padrão no banco pelo CPF fixo
+      const DEFAULT_CPF = process.env.DEFAULT_USER_CPF || '12345678901';
+      const user = await this.userService.findByCpf(DEFAULT_CPF);
+
+      if (user) {
+        // Injeta os dados do usuário no contexto e vai direto para o menu
+        actor.send({
+          type: 'LOAD_USER',
+          value: {
+            name: user.name,
+            cpf: user.cpf,
+            birthDate: user.birthDate,
+            socialName: user.socialName || '',
+            hasSocialName: user.hasSocialName,
+            sex: user.sex || '',
+            hasHealthProfessionalName: user.hasHealthProfessionalName,
+            healthProfessionalName: user.healthProfessionalName || '',
+          },
+        });
+        this.logger.log(`User loaded from DB: ${user.name}`);
+      }
+
+      this.actors[sessionId] = actor;
       this.logger.log(`New machine created - session id: ${sessionId}`);
     }
     return this.actors[sessionId];
@@ -26,7 +54,7 @@ export class MachineService {
     message: string,
   ): Promise<string[]> {
     this.logger.log('Starting machine message interpretation');
-    const actor = this.getOrCreateActor(sessionId);
+    const actor = await this.getOrCreateActor(sessionId);
 
     let snapshot = actor.getSnapshot();
     const lastStateValue = snapshot.value;
@@ -124,7 +152,7 @@ export class MachineService {
     }
 
     const YES_VARIANTS = ['sim', 's', 'si', 'yes', 'y', 'claro', 'quero', 'afirmativo', 'com certeza', 'pode ser'];
-    const NO_VARIANTS = ['nao', 'n', 'no', 'negativo', 'nao quero', 'nao quero'];
+    const NO_VARIANTS = ['nao', 'n', 'no', 'negativo', 'nao quero'];
 
     if (YES_VARIANTS.includes(normalized) || YES_VARIANTS.some(v => normalized.startsWith(v))) {
       return 'YES';

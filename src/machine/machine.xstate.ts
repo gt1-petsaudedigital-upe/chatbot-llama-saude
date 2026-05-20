@@ -1,16 +1,8 @@
 import { assign, createMachine, fromPromise, StateMachine } from 'xstate';
 import { ChatMessage } from '../chat/chat.types';
 import { GroqService } from 'src/groq/groq.service';
-import { VaccinationData, vacinacao } from 'src/data/vacina.data';
+import { vacinacao } from 'src/data/vacina.data';
 import { Logger } from '@nestjs/common';
-import { error } from 'console';
-
-interface ChatflowContext {
-  userInput: string;
-  response: string;
-  responses: string[];
-  nextState?: string;
-}
 
 const logger = new Logger(StateMachine.name);
 
@@ -33,14 +25,15 @@ export const createChatflowMachine = (groqService: GroqService) =>
           hasSocialName: false,
           socialName: '',
           cpf: '',
+          sex: '',
+          hasHealthProfessionalName: false,
+          healthProfessionalName: '',
           address: {
             neighborhood: '',
             street: '',
             number: '',
             complement: '',
           },
-          hasHealthProfessionalName: false,
-          healthProfessionalName: '',
         },
       },
       on: {
@@ -55,9 +48,45 @@ export const createChatflowMachine = (groqService: GroqService) =>
       states: {
         start: {
           always: {
-            target: 'collect_name',
+            target: 'load_user',
           },
         },
+
+        // ── Carrega usuário do banco ──
+        load_user: {
+          on: {
+            LOAD_USER: {
+              target: 'menu',
+              actions: assign(({ event }) => ({
+                userInformation: {
+                  name: event.value.name,
+                  cpf: event.value.cpf,
+                  birthDate: event.value.birthDate,
+                  socialName: event.value.socialName || '',
+                  hasSocialName: event.value.hasSocialName,
+                  sex: event.value.sex || '',
+                  hasHealthProfessionalName: event.value.hasHealthProfessionalName,
+                  healthProfessionalName: event.value.healthProfessionalName || '',
+                  address: {
+                    neighborhood: '',
+                    street: '',
+                    number: '',
+                    complement: '',
+                  },
+                },
+                responses: [
+                  `Olá, **${event.value.name}**! Seus dados foram carregados com sucesso.`,
+                ],
+              })),
+            },
+            // Fallback: se não houver usuário no banco, coleta normalmente
+            USER_INPUT: {
+              target: 'collect_name',
+            },
+          },
+        },
+
+        // ── Coleta de dados do usuário ──
         collect_name: {
           on: {
             USER_INPUT: [
@@ -109,7 +138,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 }),
               ),
             },
-            // Fallback: usuário digitou outra coisa em vez de Sim/Não
             USER_INPUT: {
               target: 'validate_name',
               actions: assign(({ context }) => ({
@@ -227,7 +255,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 userInput: undefined,
               })),
             },
-            // Fallback: usuário digitou outra coisa em vez de Sim/Não
             USER_INPUT: {
               target: 'validate_social_name',
               actions: assign(({ context }) => ({
@@ -441,6 +468,8 @@ export const createChatflowMachine = (groqService: GroqService) =>
             },
           },
         },
+
+        // ── Menu principal ──
         menu: {
           on: {
             HEALTH_ISSUE_INFORM: 'health_issue_inform_flow',
@@ -450,12 +479,13 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              'Ok! Dados coletados.',
               'Bem-vindo ao menu de serviços!',
               'Você gostaria de: \n 1) Informar um problema de saúde \n 2) Agendar ou confirmar uma consulta ou procedimento \n 3) Orientações rápidas',
             ],
           })),
         },
+
+        // ── Fluxo 1 - Informar problema de saúde ──
         health_issue_inform_flow: {
           on: {
             USER_INPUT: {
@@ -484,17 +514,13 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 target: 'health_issue_mild_symptoms',
                 guard: ({ event }) =>
                   event.output === 'health_issue_mild_symptoms',
-                actions: assign({
-                  userInput: undefined,
-                }),
+                actions: assign({ userInput: undefined }),
               },
               {
                 target: 'health_issue_severe_symptoms',
                 guard: ({ event }) =>
                   event.output === 'health_issue_severe_symptoms',
-                actions: assign({
-                  userInput: undefined,
-                }),
+                actions: assign({ userInput: undefined }),
               },
             ],
             onError: {
@@ -516,11 +542,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               `Com base no que você me relatou, você pode tomar algumas precauções ainda em casa: \nLembre-se de repousar e se hidrate. \nSe os sintomas persistirem ou piorarem, busque a UBS mais próxima de você!`,
             ],
           })),
-          after: {
-            600: {
-              target: 'still_need_help',
-            },
-          },
+          after: { 600: { target: 'still_need_help' } },
         },
         health_issue_severe_symptoms: {
           entry: assign(({ context }) => ({
@@ -529,12 +551,10 @@ export const createChatflowMachine = (groqService: GroqService) =>
               `Seus sintomas indicam alerta! \nProcure o hospital mais perto de você para ser atendido prontamente!`,
             ],
           })),
-          after: {
-            600: {
-              target: 'still_need_help',
-            },
-          },
+          after: { 600: { target: 'still_need_help' } },
         },
+
+        // ── Fluxo 2 - Agendamento ──
         schedule_appointment_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -557,9 +577,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           on: {
             USER_INPUT: {
               target: 'appointment_search',
-              actions: assign({
-                userInput: ({ event }) => event.value,
-              }),
+              actions: assign({ userInput: ({ event }) => event.value }),
             },
           },
         },
@@ -581,10 +599,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             },
             onError: {
               target: 'error',
-              actions: assign({
-                response:
-                  'Erro ao buscar as datas disponíveis. Tente novamente.',
-              }),
+              actions: assign({ response: 'Erro ao buscar as datas disponíveis. Tente novamente.' }),
             },
           },
         },
@@ -592,9 +607,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           on: {
             USER_INPUT: {
               target: 'date_extraction',
-              actions: assign({
-                userInput: ({ event }) => event.value,
-              }),
+              actions: assign({ userInput: ({ event }) => event.value }),
             },
           },
         },
@@ -605,14 +618,12 @@ export const createChatflowMachine = (groqService: GroqService) =>
           invoke: {
             src: 'extractChosenDate',
             input: ({ context: { userInput, scheduledDateOptions } }) => ({
-              userInput: userInput,
+              userInput,
               availableDates: scheduledDateOptions,
             }),
             onDone: {
               target: 'try_schedule_appointment',
-              actions: assign({
-                chosenDate: ({ event }) => event.output.chosenDate,
-              }),
+              actions: assign({ chosenDate: ({ event }) => event.output.chosenDate }),
             },
             onError: {
               target: 'list_appointment_options',
@@ -627,16 +638,15 @@ export const createChatflowMachine = (groqService: GroqService) =>
         },
         try_schedule_appointment: {
           entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              'Verificando disponibilidade da vaga...',
-            ],
+            responses: [...context.responses, 'Verificando disponibilidade da vaga...'],
           })),
           invoke: {
             src: 'scheduleAppointment',
-            input: ({
-              context: { typeOfAppointment, chosenDate, scheduledDateOptions },
-            }) => ({ typeOfAppointment, chosenDate, scheduledDateOptions }),
+            input: ({ context: { typeOfAppointment, chosenDate, scheduledDateOptions } }) => ({
+              typeOfAppointment,
+              chosenDate,
+              scheduledDateOptions,
+            }),
             onDone: {
               target: 'still_need_help',
               actions: assign(({ event, context }) => ({
@@ -649,7 +659,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             },
             onError: {
               target: 'schedule_error_retry',
-              actions: assign(({ event, context }) => ({
+              actions: assign(({ context }) => ({
                 responses: [
                   ...context.responses,
                   'Oops! \nAo tentarmos agendar, ocorreu um erro na reserva. \nVocê gostaria de tentar novamente com outra data?',
@@ -665,6 +675,8 @@ export const createChatflowMachine = (groqService: GroqService) =>
           },
         },
         query_appointment: {},
+
+        // ── Fluxo 3 - Orientações rápidas ──
         quick_guidance_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -701,13 +713,9 @@ export const createChatflowMachine = (groqService: GroqService) =>
           on: {
             MYSELF: {
               target: 'overall_vaccine_guidance',
-              actions: assign({
-                userInput: ({ event }) => event.value,
-              }),
+              actions: assign({ userInput: ({ event }) => event.value }),
             },
-            OTHER_PERSON: {
-              target: 'get_guests_birthdate',
-            },
+            OTHER_PERSON: { target: 'get_guests_birthdate' },
           },
         },
         get_guests_birthdate: {
@@ -720,18 +728,14 @@ export const createChatflowMachine = (groqService: GroqService) =>
           on: {
             USER_INPUT: {
               target: 'overall_vaccine_guidance',
-              actions: assign({
-                userInput: ({ event }) => event.value,
-              }),
+              actions: assign({ userInput: ({ event }) => event.value }),
             },
           },
         },
         overall_vaccine_guidance: {
           invoke: {
             input: ({ context: { userInformation, userInput } }) =>
-              userInformation.birthDate === ''
-                ? userInformation.birthDate
-                : userInput,
+              userInformation.birthDate === '' ? userInformation.birthDate : userInput,
             src: 'askLlamaOnVaccineGuidance',
             onDone: {
               target: 'sus_check',
@@ -757,9 +761,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           on: {
             USER_INPUT: {
               target: 'analyse_hygiene_doubt',
-              actions: assign({
-                userInput: ({ event }) => event.value,
-              }),
+              actions: assign({ userInput: ({ event }) => event.value }),
             },
           },
         },
@@ -789,17 +791,12 @@ export const createChatflowMachine = (groqService: GroqService) =>
         },
         urgency_situation_flow: {
           entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              'Ok! \nQue tipo de urgência você está enfrentando?',
-            ],
+            responses: [...context.responses, 'Ok! \nQue tipo de urgência você está enfrentando?'],
           })),
           on: {
             USER_INPUT: {
               target: 'analyse_urgency_situation_matter',
-              actions: assign({
-                userInput: ({ event }) => event.value,
-              }),
+              actions: assign({ userInput: ({ event }) => event.value }),
             },
           },
         },
@@ -838,9 +835,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               'Ou acesse o site: https://meususdigital.saude.gov.br/publico/conteudo',
             ],
           })),
-          always: {
-            target: 'redirect_appointment_schedule',
-          },
+          always: { target: 'redirect_appointment_schedule' },
         },
         sus_check_urgency_cases: {
           entry: assign(({ context }) => ({
@@ -851,9 +846,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               'Ou acesse o aplicativo Meu SUS Digital',
             ],
           })),
-          always: {
-            target: 'redirect_appointment_schedule',
-          },
+          always: { target: 'redirect_appointment_schedule' },
         },
         redirect_appointment_schedule: {
           on: {
@@ -861,18 +854,12 @@ export const createChatflowMachine = (groqService: GroqService) =>
             NO: 'still_need_help',
           },
           entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              'Deseja agendar uma consulta na UBS para avaliação?',
-            ],
+            responses: [...context.responses, 'Deseja agendar uma consulta na UBS para avaliação?'],
           })),
         },
         still_need_help: {
           entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              `Há mais algo em que eu possa ajudar?`,
-            ],
+            responses: [...context.responses, `Há mais algo em que eu possa ajudar?`],
             response: `Há mais algo em que eu possa ajudar?`,
           })),
           on: {
@@ -881,11 +868,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           },
         },
         error: {
-          after: {
-            500: {
-              target: 'menu',
-            },
-          },
+          after: { 500: { target: 'menu' } },
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
@@ -896,10 +879,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
         end_session: {
           type: 'final',
           entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              `Certo! Obrigada por usar o assistente virtual do SUS!`,
-            ],
+            responses: [...context.responses, `Certo! Obrigada por usar o assistente virtual do SUS!`],
             response: `Certo! Obrigada por usar o assistente virtual do SUS!`,
           })),
         },
@@ -910,9 +890,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
         askLlamaForSymptomSeverity: fromPromise(
           async ({ input }: { input: string }) => {
             try {
-              if (!input) {
-                throw new Error('Input inválido');
-              }
+              if (!input) throw new Error('Input inválido');
               const prompt: ChatMessage[] = [
                 {
                   role: 'system',
@@ -921,18 +899,11 @@ export const createChatflowMachine = (groqService: GroqService) =>
                 },
                 { role: 'user', content: input },
               ];
-
               const rawResponse = await groqService.askGroq(prompt);
-              const parsed = JSON.parse(rawResponse) as {
-                response: string;
-                nextState: string;
-              };
+              const parsed = JSON.parse(rawResponse) as { response: string; nextState: string };
               return parsed.nextState;
             } catch (error) {
-              return {
-                response: 'Erro na análise. Tente novamente.',
-                nextState: 'error',
-              };
+              return { response: 'Erro na análise. Tente novamente.', nextState: 'error' };
             }
           },
         ),
@@ -941,64 +912,29 @@ export const createChatflowMachine = (groqService: GroqService) =>
             let typeOfAppointment: string | null;
             const option = Number(input);
             switch (option) {
-              case 1:
-                typeOfAppointment = 'consulta_medica';
-                break;
-              case 2:
-                typeOfAppointment = 'consulta_enfermagem';
-                break;
-              case 3:
-                typeOfAppointment = 'consulta_emulti';
-                break;
-              case 4:
-                typeOfAppointment = 'consulta_odontologica';
-                break;
-              case 5:
-                typeOfAppointment = 'marcar_procedimento';
-                break;
-              default:
-                typeOfAppointment = null;
-                break;
+              case 1: typeOfAppointment = 'consulta_medica'; break;
+              case 2: typeOfAppointment = 'consulta_enfermagem'; break;
+              case 3: typeOfAppointment = 'consulta_emulti'; break;
+              case 4: typeOfAppointment = 'consulta_odontologica'; break;
+              case 5: typeOfAppointment = 'marcar_procedimento'; break;
+              default: typeOfAppointment = null; break;
             }
-
-            if (typeOfAppointment === null) {
-              throw new Error('Não foi possível identificar procedimento');
-            }
+            if (typeOfAppointment === null) throw new Error('Não foi possível identificar procedimento');
 
             const today = new Date();
-
-            const data1 = new Date(today);
-            data1.setDate(today.getDate() + 5);
-
-            const data2 = new Date(today);
-            data2.setDate(today.getDate() + 10);
-
-            const data3 = new Date(today);
-            data3.setDate(today.getDate() + 15);
-
-            const hour = new Date(today);
-            hour.setHours(14, 0);
+            const data1 = new Date(today); data1.setDate(today.getDate() + 5);
+            const data2 = new Date(today); data2.setDate(today.getDate() + 10);
+            const data3 = new Date(today); data3.setDate(today.getDate() + 15);
+            const hour = new Date(today); hour.setHours(14, 0);
 
             const scheduleOptions = [
-              {
-                data: data1.toLocaleDateString(),
-                hora: `${hour.getHours()}:${hour.getMinutes() < 10 ? `0${hour.getMinutes()}` : hour.getMinutes()}`,
-              },
-              {
-                data: data2.toLocaleDateString(),
-                hora: `${hour.getHours()}:${hour.getMinutes() < 10 ? `0${hour.getMinutes()}` : hour.getMinutes()}`,
-              },
-              {
-                data: data3.toLocaleDateString(),
-                hora: `${hour.getHours()}:${hour.getMinutes() < 10 ? `0${hour.getMinutes()}` : hour.getMinutes()}`,
-              },
+              { data: data1.toLocaleDateString(), hora: `${hour.getHours()}:${hour.getMinutes() < 10 ? `0${hour.getMinutes()}` : hour.getMinutes()}` },
+              { data: data2.toLocaleDateString(), hora: `${hour.getHours()}:${hour.getMinutes() < 10 ? `0${hour.getMinutes()}` : hour.getMinutes()}` },
+              { data: data3.toLocaleDateString(), hora: `${hour.getHours()}:${hour.getMinutes() < 10 ? `0${hour.getMinutes()}` : hour.getMinutes()}` },
             ];
 
-            const response =
-              'Certo!\n\n Para essa modalidade temos: \n\n\n' +
-              scheduleOptions
-                .map((option) => `- ${option.data} às ${option.hora}`)
-                .join('\n') +
+            const response = 'Certo!\n\n Para essa modalidade temos: \n\n\n' +
+              scheduleOptions.map((o) => `- ${o.data} às ${o.hora}`).join('\n') +
               '\nQual a sua disponibilidade?';
 
             return { scheduleOptions, typeOfAppointment, response };
@@ -1006,10 +942,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
         }),
         extractChosenDate: fromPromise(async ({ input }: { input: any }) => {
           try {
-            const availableDatesList = input.availableDates
-              .map((d) => `${d.data} às ${d.hora}`)
-              .join(', ');
-
+            const availableDatesList = input.availableDates.map((d) => `${d.data} às ${d.hora}`).join(', ');
             const prompt: ChatMessage[] = [
               {
                 role: 'system',
@@ -1020,18 +953,10 @@ export const createChatflowMachine = (groqService: GroqService) =>
               },
               { role: 'user', content: input.userInput },
             ];
-
             const rawResponse = await groqService.askGroq(prompt);
             const parsed = JSON.parse(rawResponse);
-
-            if (parsed.chosen_date === 'null') {
-              throw new Error('Data não identificada ou inválida.');
-            }
-
-            return {
-              chosenDate: parsed.chosen_date,
-              chosenTime: parsed.chosen_time,
-            };
+            if (parsed.chosen_date === 'null') throw new Error('Data não identificada ou inválida.');
+            return { chosenDate: parsed.chosen_date, chosenTime: parsed.chosen_time };
           } catch (err) {
             throw new Error(err instanceof Error ? err.message : String(err));
           }
@@ -1039,211 +964,106 @@ export const createChatflowMachine = (groqService: GroqService) =>
         scheduleAppointment: fromPromise(async ({ input }: { input: any }) => {
           try {
             const selectedAppointment = input.scheduledDateOptions.find(
-              (dateOption) => {
-                return dateOption.data === input.chosenDate.trim();
-              },
+              (dateOption) => dateOption.data === input.chosenDate.trim(),
             );
-
-            if (!selectedAppointment) {
-              throw new Error('Data ou horário selecionado não disponível');
-            }
-
-            const isConfirmed = true;
-
-            if (isConfirmed) {
-              return {
-                sucess: true,
-                date: selectedAppointment.data,
-                time: selectedAppointment.hora,
-              };
-            } else {
-              throw new Error('Falha ao reservar o horário no sistema.');
-            }
+            if (!selectedAppointment) throw new Error('Data ou horário selecionado não disponível');
+            return { sucess: true, date: selectedAppointment.data, time: selectedAppointment.hora };
           } catch (err) {
             throw err;
           }
         }),
-        askLlamaOnVaccineGuidance: fromPromise(
-          async ({ input }: { input: string }) => {
-            const data = vacinacao;
-            const birthDate = new Date(input);
-            const today = new Date();
-            const age: string = JSON.stringify({
-              anos: today.getFullYear() - birthDate.getFullYear(),
-              meses: today.getMonth() - birthDate.getMonth(),
-            });
+        askLlamaOnVaccineGuidance: fromPromise(async ({ input }: { input: string }) => {
+          const data = vacinacao;
+          const birthDate = new Date(input);
+          const today = new Date();
+          const age: string = JSON.stringify({
+            anos: today.getFullYear() - birthDate.getFullYear(),
+            meses: today.getMonth() - birthDate.getMonth(),
+          });
+          const prompt: ChatMessage[] = [
+            {
+              role: 'system',
+              content: `O usuário busca saber quais são as vacinas que ele deve tomar.
+                    Você deve analisar a idade do usuário (em anos) fornecida no input e classificá-lo em uma das 5 categorias: crianca (0-10), adolescente (11-19), adulto (20-59), gestante, idoso (60+). 
+                    Retorne APENAS um objeto JSON no formato: {"category": "crianca"} ou {"category": "adolescente"} etc.`,
+            },
+            { role: 'user', content: age },
+          ];
+          const rawResponse = await groqService.askGroq(prompt);
+          const parse = JSON.parse(rawResponse);
+          const responseCategory = parse.category;
+          const vaccinationData = data.find((d) => d.category === responseCategory);
+          if (!vaccinationData) throw new Error(`Dados de vacinação não encontrados para: ${responseCategory}`);
 
+          const categoryMap: { [key: string]: string } = {
+            crianca: 'Criança', adolescente: 'Adolescente', adulto: 'Adulto', gestante: 'Gestante', idoso: 'Idoso',
+          };
+          const category = categoryMap[vaccinationData.category] || 'Faixa Etária Não Identificada';
+          const vaccinesList = vaccinationData.vaccines
+            .map((vaccine) => `- ${vaccine.name}: ${vaccine.description} - Doses: ${vaccine.dosage === 1 ? 'Dose Única' : vaccine.dosage}`)
+            .join('\n\n');
+
+          return {
+            categoryResponse: 'Com base na idade, identificamos que a categoria é classificada como ' + `*${category}*\n\n`,
+            messageResponse: `${vaccinationData.message}\n\n`,
+            vaccineListResponse: `Para essa categoria, as vacinas recomendadas são: \n ${vaccinesList}`,
+          };
+        }),
+        classifyAndRespondToHygieneMeasureDoubt: fromPromise(async ({ input }: { input: string }) => {
+          try {
             const prompt: ChatMessage[] = [
               {
                 role: 'system',
-                content: `O usuário busca saber quais são as vacinas que ele deve tomar.
-                      Você deve analisar a idade do usuário (em anos) fornecida no input e classificá-lo em uma das 5 categorias: crianca (0-10), adolescente (11-19), adulto (20-59), gestante, idoso (60+). 
-                      Se for o caso de gestante, o Groq Service deve retornar "gestante" independentemente da idade. Se não houver dados específicos de gestação, siga a regra de idade.
-                      Retorne APENAS um objeto JSON no formato: {"category": "crianca"} ou {"category": "adolescente"} etc.`,
+                content: `Você é um especialista em medidas de higiene na saúde pública. Classifique a dúvida em Higiene Pessoal, Higiene de Alimentos ou Higiene Ambiental/Saneamento Básico e responda de forma clara e curta.
+                Retorne um JSON: {"category": "higiene_ambiental", "response": (resposta aqui)}`,
               },
-              { role: 'user', content: age },
+              { role: 'user', content: input },
             ];
-
             const rawResponse = await groqService.askGroq(prompt);
-            const parse = JSON.parse(rawResponse);
-            const responseCategory = parse.category;
-
-            const vaccinationData = data.find(
-              (d) => d.category === responseCategory,
-            );
-
-            if (!vaccinationData) {
-              throw new Error(
-                `Dados de vacinação não encontrados para a categoria: ${responseCategory}`,
-              );
-            }
-
-            const categoryMap: { [key: string]: string } = {
-              crianca: 'Criança',
-              adolescente: 'Adolescente',
-              adulto: 'Adulto',
-              gestante: 'Gestante',
-              idoso: 'Idoso',
-            };
-
-            const category =
-              categoryMap[vaccinationData.category] ||
-              'Faixa Etária Não Identificada';
-
-            const vaccinesList = vaccinationData.vaccines
-              .map(
-                (vaccine) =>
-                  `- ${vaccine.name}: ${vaccine.description} - Doses: ${vaccine.dosage === 1 ? 'Dose Única' : vaccine.dosage}`,
-              )
-              .join('\n\n');
-
-            return {
-              categoryResponse:
-                'Com base na idade, identificamos que a categoria que a pessoa se encaixa é classificada como ' +
-                `*${category}*\n\n`,
-              messageResponse: `${vaccinationData.message}\n\n`,
-              vaccineListResponse: `Para essa categoria que a pessoa se encaixa, as vacinas recomendadas são: \n ${vaccinesList}`,
-            };
-          },
-        ),
-        classifyAndRespondToHygieneMeasureDoubt: fromPromise(
-          async ({ input }: { input: string }) => {
-            try {
-              const prompt: ChatMessage[] = [
-                {
-                  role: 'system',
-                  content: `Você é um especialista em medidas de higiene na saúde pública. Você receberá uma dúvida sobre medidas de higiene e deverá 
-                classificar a dúvida dele em Higiene Pessoal (cuidados básicos que cada indivíduo deve ter), Higiene de Alimentos (Práticas relacionadas 
-                ao manuseio, preparo e conservação dos alimentos para evitar contaminação e doenças transmitidas por eles) e Higiene Ambiental/Saneamento Básico 
-                (Ações que envolvem o ambiente e a comunidade, muitas vezes coordenadas pelo poder público, onde o SUS tem um papel na articulação dessas políticas,
-                ex: qualidade da água, esgotamento sanitário, manejo de resíduos sólidos, limpeza de ambientes). Em seguida, deve responder a essa dúvida de maneira 
-                correta, adequada, de maneira clara e curta. 
-                A dúvida que você vai receber, pode ser tradicionalmente respondida em Unidades Básicas de Saúde (UBS), com Agentes Comunitários
-                de Saúde (ACS) ou com a Vigilância Sanitária. Você não pode responder o que não for verdade e o que não for informação conhecida do Ministério da Saúde.
-                Você deve retornar um JSON com a estrutura {"category": "higiene_ambiental", "response": (resposta aqui)}, e as opções para "category" que você tem são:
-                higiene_ambiental, higiene_pessoal e higiene_alimentos`,
-                },
-                { role: 'user', content: input },
-              ];
-
-              const rawResponse = await groqService.askGroq(prompt);
-              let cleanResponse = rawResponse.replace(/[\n\r]/g, '');
-              cleanResponse = cleanResponse.trim();
-
-              const parsed = JSON.parse(cleanResponse);
-              let botResponse = parsed.response;
-              botResponse = botResponse.split(/(?<=[.:;])/);
-              let response: string = '';
-
-              botResponse.forEach((substring) => {
-                response += substring + '\n';
-              });
-
-              return response;
-            } catch (err) {
-              throw err;
-            }
-          },
-        ),
-        classifyAndProvideGuidanceToUrgentSituation: fromPromise(
-          async ({ input }: { input: string }) => {
-            try {
-              const prompt: ChatMessage[] = [
-                {
-                  role: 'system',
-                  content: `
-                  Você é um sistema de orientação de saúde em situações de urgência. Sua tarefa é analisar a situação de urgência descrita pelo usuário, classificá-la e fornecer uma resposta imediata. Lembre-se: você é um assistente, não um médico. Sua análise deve ser criteriosa, já que o objetivo é que se a pessoa puder resolver em casa, ela consiga resolver.
-
-                  O seu retorno DEVE ser um objeto JSON no formato {"severity": "classificação", "response": "instruções"}.
-
-                  Instruções para a classificação e resposta:
-
-                  1. CLASSIFICAÇÃO (Severity): Classifique a gravidade em uma das três categorias:
-                      - "domiciliar": A situação é leve e pode ser resolvida com medidas simples e seguras em casa.
-                      - "encaminhamento_rapido": A situação é séria, mas a intervenção imediata em casa é crucial para estabilizar e a pessoa precisa de atendimento profissional breve (UPA ou Unidade de Saúde).
-                      - "emergencia_imediata": A vida da pessoa está em risco iminente (exemplos: perda de consciência, dificuldade respiratória grave, convulsão, sangramento arterial incontrolável) ou outras situações em que o acionamento do SAMU (192) ou Corpo de Bombeiros (193) é a primeira e única ação recomendada.
-
-                  2. RESPOSTA (Response):
-                      - A resposta deve ser **curta, clara e segura**.
-                      - NÃO forneça diagnósticos, apenas orientações de primeiros socorros e encaminhamento.
-                      - Se a gravidade for "domiciliar": Forneça orientações concisas, seguras e facilmente aplicáveis para a resolução imediata em casa.
-                      - Se a gravidade for "encaminhamento_rapido": Forneça **instruções imediatas e cruciais** para o momento (o que fazer e, principalmente, o que **NÃO** fazer para evitar piora) e oriente o usuário a procurar a **Unidade de Saúde mais próxima ou uma UPA** (Unidade de Pronto Atendimento).
-                      - Se a gravidade for "emergencia_imediata": Forneça **instruções imediatas de primeiros socorros** que podem salvar a vida e oriente o usuário a ligar para o **SAMU (192) ou o Corpo de Bombeiros (193)**. É somente nesse tipo de situação que se recomenda procurar as duas instituições mencionadas.
-
-                  SUA SAÍDA DEVE CONTER APENAS O OBJETO JSON.
-                  `,
-                },
-                {
-                  role: 'user',
-                  content: input,
-                },
-              ];
-
-              const rawResponse = await groqService.askGroq(prompt);
-              const parsed = JSON.parse(rawResponse);
-              const response = parsed.response;
-
-              return response;
-            } catch (err) {
-              throw err;
-            }
-          },
-        ),
+            let cleanResponse = rawResponse.replace(/[\n\r]/g, '').trim();
+            const parsed = JSON.parse(cleanResponse);
+            let botResponse = parsed.response;
+            botResponse = botResponse.split(/(?<=[.:;])/);
+            let response: string = '';
+            botResponse.forEach((substring) => { response += substring + '\n'; });
+            return response;
+          } catch (err) {
+            throw err;
+          }
+        }),
+        classifyAndProvideGuidanceToUrgentSituation: fromPromise(async ({ input }: { input: string }) => {
+          try {
+            const prompt: ChatMessage[] = [
+              {
+                role: 'system',
+                content: `Você é um sistema de orientação de saúde em situações de urgência. Analise a situação e retorne APENAS um objeto JSON no formato {"severity": "classificação", "response": "instruções"}.
+                Classificações: "domiciliar", "encaminhamento_rapido", "emergencia_imediata".`,
+              },
+              { role: 'user', content: input },
+            ];
+            const rawResponse = await groqService.askGroq(prompt);
+            const parsed = JSON.parse(rawResponse);
+            return parsed.response;
+          } catch (err) {
+            throw err;
+          }
+        }),
         validateDate: fromPromise(async ({ input }: { input: string }) => {
           try {
-            const dateString = input;
             const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-
-            if (!regex.test(dateString)) {
-              throw new Error('Formato inválido. Use DD/MM/AAAA.');
-            }
-
-            const parts = regex.exec(dateString) as RegExpExecArray;
-
+            if (!regex.test(input)) throw new Error('Formato inválido. Use DD/MM/AAAA.');
+            const parts = regex.exec(input) as RegExpExecArray;
             const day = parseInt(parts[1], 10);
             const month = parseInt(parts[2], 10);
             const year = parseInt(parts[3], 10);
-
-            const dateObject = new Date();
-            dateObject.setDate(day);
-            dateObject.setMonth(month - 1);
-            dateObject.setFullYear(year);
-
+            const dateObject = new Date(year, month - 1, day);
             const isDateValid =
               dateObject.getFullYear() === year &&
               dateObject.getMonth() === month - 1 &&
               dateObject.getDate() === day &&
               !isNaN(dateObject.getTime());
-
-            if (!isDateValid) {
-              throw new Error(`Data ${dateObject} inválida`);
-            }
-
-            const today = new Date();
-            if (dateObject >= today) {
-              throw new Error(`Data não pode ser uma data futura`);
-            }
-
+            if (!isDateValid) throw new Error(`Data inválida`);
+            if (dateObject >= new Date()) throw new Error(`Data não pode ser futura`);
             return isDateValid;
           } catch (err) {
             throw err;
@@ -1251,62 +1071,30 @@ export const createChatflowMachine = (groqService: GroqService) =>
         }),
         validateCpf: fromPromise(async ({ input }: { input: string }) => {
           const cpf = input.replace(/[^\d]/g, '');
-
-          if (cpf.length !== 11) {
-            throw new Error('CPF deve ter 11 dígitos');
-          }
-
-          if (/^(\d)\1{10}$/.test(cpf)) {
-            throw new Error('CPF sequencial inválido.');
-          }
-
-          let sum = 0;
-          let remainder = 0;
-
-          for (let i = 1; i <= 9; i++)
-            sum = sum + parseInt(cpf.substring(i - 1, i)) * (11 - i);
+          if (cpf.length !== 11) throw new Error('CPF deve ter 11 dígitos');
+          if (/^(\d)\1{10}$/.test(cpf)) throw new Error('CPF sequencial inválido.');
+          let sum = 0, remainder = 0;
+          for (let i = 1; i <= 9; i++) sum += parseInt(cpf.substring(i - 1, i)) * (11 - i);
           remainder = (sum * 10) % 11;
           if (remainder === 10 || remainder === 11) remainder = 0;
-          if (remainder !== parseInt(cpf.substring(9, 10))) {
-            throw new Error('Primeiro dígito verificador inválido.');
-          }
-
+          if (remainder !== parseInt(cpf.substring(9, 10))) throw new Error('Primeiro dígito verificador inválido.');
           sum = 0;
-          for (let i = 1; i <= 10; i++)
-            sum = sum + parseInt(cpf.substring(i - 1, i)) * (12 - i);
+          for (let i = 1; i <= 10; i++) sum += parseInt(cpf.substring(i - 1, i)) * (12 - i);
           remainder = (sum * 10) % 11;
           if (remainder === 10 || remainder === 11) remainder = 0;
-          if (remainder !== parseInt(cpf.substring(10, 11))) {
-            throw new Error('Segundo dígito verificador inválido.');
-          }
-
+          if (remainder !== parseInt(cpf.substring(10, 11))) throw new Error('Segundo dígito verificador inválido.');
           return remainder === 0;
         }),
         validateSexOption: fromPromise(async ({ input }: { input: number }) => {
           return new Promise((resolve, reject) => {
             const rawInput = String(input).trim().toLowerCase();
             let sexValue = '';
-
-            if (rawInput === '1' || rawInput.includes('feminino')) {
-              sexValue = 'Feminino';
-            } else if (rawInput === '2' || rawInput.includes('masculino')) {
-              sexValue = 'Masculino';
-            } else if (rawInput === '3' || rawInput.includes('outro')) {
-              sexValue = 'Outro';
-            } else if (
-              rawInput === '4' ||
-              rawInput.includes('nao') ||
-              rawInput.includes('não') ||
-              rawInput.includes('nao especificar')
-            ) {
-              sexValue = 'Nao_especificado';
-            }
-
-            if (sexValue) {
-              resolve(sexValue);
-            } else {
-              reject(new Error('Opção de sexo inválida.'));
-            }
+            if (rawInput === '1' || rawInput.includes('feminino')) sexValue = 'Feminino';
+            else if (rawInput === '2' || rawInput.includes('masculino')) sexValue = 'Masculino';
+            else if (rawInput === '3' || rawInput.includes('outro')) sexValue = 'Outro';
+            else if (rawInput === '4' || rawInput.includes('nao') || rawInput.includes('não')) sexValue = 'Nao_especificado';
+            if (sexValue) resolve(sexValue);
+            else reject(new Error('Opção de sexo inválida.'));
           });
         }),
       },
