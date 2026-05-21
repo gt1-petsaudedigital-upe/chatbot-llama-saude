@@ -174,7 +174,7 @@ export class MachineService {
       }
     }
 
-    if (
+    if (  
       ![
         'HEALTH_ISSUE_INFORM',
         'SCHEDULE_APPOINTMENT',

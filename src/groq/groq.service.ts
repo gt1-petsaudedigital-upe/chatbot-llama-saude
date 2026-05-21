@@ -10,18 +10,21 @@ export class GroqService {
   private readonly groqClient: Groq;
 
   constructor(private readonly configService: ConfigService) {
-    this.apiKey = this.configService.get<string>('GROQ_API_KEY');
-    this.modelId = this.configService.get<string>('MODEL_ID');
-    const apiKey = this.apiKey;
+  this.apiKey = this.configService.get<string>('GROQ_API_KEY');
+  this.modelId = this.configService.get<string>('MODEL_ID');
 
-    if (!apiKey) {
-      throw new Error('API Key não encontrada');
-    }
-
-    this.groqClient = new Groq({ apiKey });
+  if (!this.apiKey) {
+    console.warn('GROQ_API_KEY não encontrada — GroqService desabilitado.');
+    return;
   }
 
+  this.groqClient = new Groq({ apiKey: this.apiKey });
+}
+
   async askGroq(messages: ChatMessage[]): Promise<string> {
+     if (!this.groqClient) {
+    return 'Serviço de IA indisponível no momento.';
+  }
     const formattedMessages = messages.map((m) => ({
       role: m.role,
       content: m.content,
