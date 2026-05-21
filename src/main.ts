@@ -34,6 +34,19 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`Servidor rodando em ${url}`);
   console.log(`Swagger disponível em ${swagger}`);
+
+  app.enableCors({
+  origin: [
+    'https://chat-iasys.netlify.app',
+    'https://pet-saude-dev.github.io',
+    `http://localhost:${port}`,
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+});
 }
 
 bootstrap();
