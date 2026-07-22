@@ -9,6 +9,7 @@ type ChatflowActor = ActorRefFrom<ReturnType<typeof createChatflowMachine>>;
 @Injectable()
 export class MachineService {
   private actors: Record<string, ChatflowActor> = {};
+  private pending: Record<string, Promise<ChatflowActor>> = {};
   private logger: Logger = new Logger(MachineService.name);
 
   constructor(
@@ -17,7 +18,15 @@ export class MachineService {
   ) {}
 
   public async getOrCreateActor(sessionId: string): Promise<ChatflowActor> {
-    if (!this.actors[sessionId]) {
+    if (this.actors[sessionId]) {
+      return this.actors[sessionId];
+    }
+
+    if (sessionId in this.pending) {
+      return this.pending[sessionId];
+    }
+
+    this.pending[sessionId] = (async () => {
       const machine = createChatflowMachine(this.groqService);
       const actor = createActor(machine).start();
 
@@ -42,9 +51,12 @@ export class MachineService {
       }
 
       this.actors[sessionId] = actor;
+      delete this.pending[sessionId];
       this.logger.log(`New machine created - session id: ${sessionId}`);
-    }
-    return this.actors[sessionId];
+      return actor;
+    })();
+
+    return this.pending[sessionId];
   }
 
   public async interpretMessage(
@@ -138,6 +150,7 @@ export class MachineService {
       if (trimmed === '2' || normalized.includes('febre') || normalized.includes('temperatura'))
         return 'FEBRE';
     }
+
 
     if (lastState === 'quick_guidance_psicologia') {
       if (trimmed === '1' || normalized.includes('ansiedade') || normalized.includes('stress') || normalized.includes('estresse'))
