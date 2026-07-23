@@ -335,24 +335,41 @@ export const createChatflowMachine = (groqService: GroqService) =>
         },
         query_appointment: {},
 
-        // ── Fluxo 2b - Datas de funcionamento dos serviços ──
         datas_servico_flow: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '📅 Qual serviço você gostaria de saber as datas de funcionamento?\n\n1) Médico\n2) Enfermagem\n3) Fisioterapia\n4) Odontologia\n5) Psicologia\n6) Nutrição',
-            ],
-          })),
-          on: {
-            SERVICO_MEDICO:       'datas_servico_resultado',
-            SERVICO_ENFERMAGEM:   'datas_servico_resultado',
-            SERVICO_FISIOTERAPIA: 'datas_servico_resultado',
-            SERVICO_ODONTOLOGIA:  'datas_servico_resultado',
-            SERVICO_PSICOLOGIA:   'datas_servico_resultado',
-            SERVICO_NUTRICAO:     'datas_servico_resultado',
-            USER_INPUT:           'datas_servico_flow',
-          },
-        },
+  entry: assign(({ context }) => ({
+    responses: [
+      ...context.responses,
+      '📅 Qual serviço você gostaria de saber as datas de funcionamento?\n\n1) Médico\n2) Enfermagem\n3) Fisioterapia\n4) Odontologia\n5) Psicologia\n6) Nutrição',
+    ],
+  })),
+  on: {
+    SERVICO_MEDICO: {
+      target: 'datas_servico_resultado',
+      actions: assign({ userInput: 'medico' }),
+    },
+    SERVICO_ENFERMAGEM: {
+      target: 'datas_servico_resultado',
+      actions: assign({ userInput: 'enfermagem' }),
+    },
+    SERVICO_FISIOTERAPIA: {
+      target: 'datas_servico_resultado',
+      actions: assign({ userInput: 'fisioterapia' }),
+    },
+    SERVICO_ODONTOLOGIA: {
+      target: 'datas_servico_resultado',
+      actions: assign({ userInput: 'odontologia' }),
+    },
+    SERVICO_PSICOLOGIA: {
+      target: 'datas_servico_resultado',
+      actions: assign({ userInput: 'psicologia' }),
+    },
+    SERVICO_NUTRICAO: {
+      target: 'datas_servico_resultado',
+      actions: assign({ userInput: 'nutricao' }),
+    },
+    USER_INPUT: 'datas_servico_flow',
+  },
+},
         datas_servico_resultado: {
           entry: assign(({ context }) => {
             const servico = context.userInput as string;
