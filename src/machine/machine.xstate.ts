@@ -45,7 +45,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
           always: { target: 'load_user' },
         },
 
-        // ── Carrega usuário do banco ──
         load_user: {
           on: {
             LOAD_USER: {
@@ -75,7 +74,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
           },
         },
 
-        // ── Menu principal ──
         menu: {
           entry: assign(({ context }) => ({
             responses: [
@@ -91,7 +89,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
           },
         },
 
-        // ── Fluxo 1 - Informar problema de saúde ──
         health_issue_inform_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -153,7 +150,6 @@ export const createChatflowMachine = (groqService: GroqService) =>
           after: { 600: { target: 'still_need_help' } },
         },
 
-        // ── Fluxo 2 - Agendamento ──
         schedule_appointment_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -280,7 +276,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '⚠️ Atenção: Estas informações são apenas para orientação básica e não substituem uma avaliação profissional.',
-              'Sobre qual área você gostaria de receber orientações?\n\n1) Nutrição\n2) Fisioterapia\n3) Enfermagem\n4) Psicologia\n5) Atividade Física',
+              'Sobre qual área você gostaria de receber orientações?\n\n1) Nutrição\n2) Fisioterapia\n3) Enfermagem\n4) Psicologia\n5) Atividade Física\n6) Doação de Sangue',
             ],
           })),
           on: {
@@ -289,11 +285,11 @@ export const createChatflowMachine = (groqService: GroqService) =>
             ENFERMAGEM:       'quick_guidance_enfermagem',
             PSICOLOGIA:       'quick_guidance_psicologia',
             ATIVIDADE_FISICA: 'quick_guidance_atividade_fisica',
+            DOACAO_SANGUE:    'quick_guidance_doacao_sangue',
             USER_INPUT:       'quick_guidance_flow',
           },
         },
 
-        // ── NUTRIÇÃO ──
         quick_guidance_nutricao: {
           entry: assign(({ context }) => ({
             responses: [
@@ -359,12 +355,11 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '🪑 Se trabalha sentado:\n' +
-              '- Mantenha uma postura confortável, com a coluna apoiada\n' +
-              '- Apoie os pés no chão ou em um suporte\n' +
-              '- Organize o ambiente de trabalho para evitar esforço excessivo\n' +
-              '- Evite permanecer muito tempo na mesma posição\n\n' +
-              '🧍 Se fica em pé: Levante-se e movimente-se ao longo do dia, evitando longos períodos parados.\n\n' +
-              '✅ Ao realizar tarefas diárias, procure distribuir melhor o esforço e evitar sobrecarga no corpo.',
+              '- Mantenha uma boa postura ao sentar, com costas apoiadas e pés no chão\n' +
+              '- Evite ficar muito tempo na mesma posição\n' +
+              '- Levante-se e se movimente ao longo do dia\n' +
+              '- Realize atividades sem sobrecarregar o corpo\n\n' +
+              '💪 Segundo o Ministério da Saúde do Brasil, a prática regular de atividade física, incluindo exercícios de fortalecimento muscular, é essencial para prevenir dores e manter a saúde da coluna.',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -374,20 +369,13 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '⚠️ Atenção: As quedas na terceira idade podem causar fraturas graves, mas pequenas adaptações em casa ajudam muito na prevenção.\n\n' +
-              '👟 Cuidado com o chão:\n' +
-              '- Retire tapetes soltos (ou use antiderrapantes); evite fios pelo caminho e cuidado com pisos molhados.\n\n' +
-              '💡 Iluminação:\n' +
-              '- Mantenha a casa bem iluminada, principalmente à noite. Deixe uma luz acesa próxima ao banheiro.\n\n' +
-              '👟 Calçados:\n' +
-              '- Use sapatos fechados, firmes e com solado antiderrapante. Evite andar de meias, de chinelos frouxos.\n\n' +
-              '🚿 Banheiro:\n' +
-              '- Local de maior risco. Se possível, use barras de apoio e tapetes antiderrapantes.\n\n' +
-              '💪 Importante: Manter a saúde em dia ajuda a prevenir quedas:\n' +
-              '- Fortalecer músculos e realizar treinos de equilíbrio\n' +
-              '- Praticar atividade física regularmente\n' +
-              '- Avaliar visão e audição\n' +
-              '- Revisar o uso de medicamentos\n' +
-              '- Em caso de tontura ou dificuldade para andar, procure a unidade de saúde.\n\n' +
+              '🏠 Manter a casa segura:\n' +
+              '- Retirar tapetes soltos, organizar fios e evitar pisos molhados\n' +
+              '- Garantir boa iluminação, principalmente à noite\n' +
+              '- Usar calçados firmes e antiderrapantes\n' +
+              '- Redobrar os cuidados no banheiro (barras de apoio e tapete antiderrapante)\n\n' +
+              '💪 Manter a saúde em dia com atividade física, fortalecimento muscular e revisão da visão, audição e medicamentos\n\n' +
+              '🏥 Procurar a unidade de saúde em caso de tontura ou dificuldade para andar\n\n' +
               'Fonte: Instituto Nacional de Traumatologia e Ortopedia (INTO)',
             ],
           })),
@@ -398,13 +386,17 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '🧊 GELO (Compressa Fria):\n' +
-              '- Use em pancadas recentes (até 48h), inchaço, torções ou inflamações.\n' +
-              '- Ajuda a reduzir a dor e o inchaço.\n' +
-              '- Como usar: 15 a 20 minutos, até 3 vezes ao dia.\n\n' +
+              '- Indicado para pancadas recentes (até 48h), inchaço, torções e inflamações\n' +
+              '- Ajuda a reduzir dor e edema\n' +
+              '- Como usar: 15 a 20 minutos, até 3 vezes ao dia\n\n' +
               '🔥 CALOR (Compressa Quente):\n' +
-              '- Use em dores musculares, tensão ou dores crônicas (há mais de 3 meses), como em dor nas costas ou no torcicolo.\n' +
-              '- Ajuda a relaxar o músculo e a melhorar a circulação.\n' +
-              '- Como usar: 15 a 20 minutos, até 3 vezes ao dia.\n\n' +
+              '- Indicado para dores musculares, tensão e dores crônicas (aproximadamente 3 meses), como em dor nas costas ou torcicolo\n' +
+              '- Ajuda a relaxar a musculatura e melhorar a circulação\n' +
+              '- Como usar: 15 a 20 minutos, até 3 vezes ao dia\n\n' +
+              '⚠️ Atenção:\n' +
+              '- Não aplicar diretamente na pele\n' +
+              '- Não usar calor em locais inchados ou inflamados\n' +
+              '- Se não houver melhora, procure a unidade de saúde\n\n' +
               'Fonte: Ministério da Saúde e CUF Saúde',
             ],
           })),
@@ -428,16 +420,20 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🩹 O que fazer em caso de feridas leves (cortes, arranhões):\n\n' +
-              '1. Lave o local com água corrente e sabão neutro.\n' +
-              '2. Não use partes estragadas.\n' +
-              '3. Seque com um pano limpo (faça movimentos de toque, não esfregue).\n' +
-              '4. Cubra com um curativo limpo e troque diariamente ou quando necessário.\n\n' +
+              '🩹 O que fazer em machucados leves em casa:\n\n' +
+              '- Lave o local com água corrente e sabão neutro (ou soro fisiológico)\n' +
+              '- Não use receitas caseiras (pasta de dente, pó de café, pomadas sem orientação)\n' +
+              '- Seque com um pano limpo e mantenha a área limpa\n' +
+              '- Cubra apenas se houver necessidade\n\n' +
+              'Fonte: Ministério da Saúde\n\n' +
               '⚠️ Atenção: Procure a unidade de saúde se houver:\n' +
-              '- Sinais de infecção (vermelhidão, inchaço, pus)\n' +
-              '- Ferida profunda ou que não para de sangrar\n' +
-              '- Dúvida sobre necessidade de ponto ou vacina antitetânica\n\n' +
-              'Fonte: Ministério da Saúde',
+              '- Corte profundo ou sangramento abundante\n' +
+              '- Contato com sujeira (terra, objetos enferrujados)\n' +
+              '- Presença de secreção, dor ou vermelhidão\n' +
+              '- Queimaduras\n' +
+              '- Picadas de animais peçonhentos\n' +
+              '- Feridas nos pés ou úlceras\n' +
+              '👉 Em caso de dúvida, procure a unidade básica de saúde.',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -446,17 +442,19 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🌡️ Temperatura acima de 37,8°C já pode ser considerada febre para adultos.\n\n' +
-              'Em casa você pode:\n' +
-              '- Repousar\n' +
-              '- Hidratar-se bem\n' +
-              '- Usar roupas leves\n' +
-              '- Medicamentos (somente se recomendados pelo médico)\n\n' +
+              '🌡️ Febre é quando a temperatura corporal está igual ou acima de 37,5°C, em qualquer idade.\n\n' +
+              'Na maioria dos casos, você pode começar com cuidados em casa:\n' +
+              '- Hidrate-se\n' +
+              '- Descanse\n' +
+              '- Use roupas leves\n' +
+              '- Pode tomar banho morno\n\n' +
+              '🚫 O que evitar:\n' +
+              '- Evite tomar medicamentos sem orientação de um profissional de saúde\n' +
+              '- Não use álcool ou água gelada no corpo\n' +
+              '- Não se agasalhe em excesso\n\n' +
               '🔴 Procure atendimento de saúde se houver:\n' +
-              '- Febre acima de 39°C ou que persiste por mais de 3 dias\n' +
-              '- Febre com manchas na pele, confusão mental, dificuldade para respirar\n' +
-              '- Febre em bebês com menos de 3 meses\n' +
-              '- Convulsão por causa da febre',
+              '- Febre que persiste por 2 dias ou piora\n' +
+              '- Aparecimento de outros sintomas como: falta de ar, confusão ou sonolência excessiva, manchas pelo corpo, dor intensa ou piora do estado geral',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -481,13 +479,12 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🧘 Algumas técnicas que podem ajudar no controle da ansiedade e do stress:\n\n' +
-              '- Respiração profunda: inspire devagar pelo nariz (4s), segure (4s), e expire pela boca (4s)\n' +
-              '- Respire profundamente ao sentir a ansiedade aumentar\n' +
-              '- Tente nomear o que está sentindo (ex: "estou ansioso por causa de X")\n' +
-              '- Pratique atividade física regularmente\n' +
-              '- Saia um pouco para tomar ar e se movimentar\n' +
-              '- Reduza o tempo em redes sociais e notícias negativas\n\n' +
+              '🧘 Sentindo o coração acelerado ou muita ansiedade?\n\n' +
+              'Tente a respiração 4-7-8:\n' +
+              '- Inspire pelo nariz contando até 4\n' +
+              '- Segure o ar contando até 7\n' +
+              '- Solte lentamente pela boca contando até 8\n\n' +
+              'Repita 4 vezes, pois ao focar na sua respiração pode ajudar a acalmar seu corpo e mente.\n\n' +
               '⚠️ Esta técnica auxilia o relaxamento e pode ajudar a reduzir momentos de ansiedade e estresse — mas não substitui acompanhamento profissional.',
             ],
           })),
@@ -497,12 +494,12 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '💙 Se você ou alguém que você conhece está passando por um momento muito difícil, saiba que não precisa enfrentar isso sozinho.\n\n' +
-              'Se precisar de apoio emocional ou estiver em crise, você pode ligar para o:\n\n' +
+              '💙 Cuidar da saúde mental é essencial.\n\n' +
+              'Se você está com tristeza profunda, angústia ou pensamentos difíceis, além de procurar atendimento em uma UBS, você também pode contar com o Centro de Valorização da Vida pelo número 188.\n\n' +
               '📞 CVV – Centro de Valorização da Vida\n' +
               'Ligue 188 (24 horas por dia, 7 dias por semana)\n' +
-              'Ou acesse: https://www.cvv.org.br\n\n' +
-              'Você também pode buscar atendimento em saúde mental na UBS mais próxima de você.',
+              'O atendimento é gratuito, sigiloso e funciona 24 horas por dia.\n\n' +
+              'Ou acesse: https://www.cvv.org.br',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -527,6 +524,11 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '💪 Que bom que você quer saber sobre atividade física! Se movimentar faz muito bem para a saúde.\n\n' +
+              '⚠️ Atenção antes de praticar atividade física:\n' +
+              '- Procure um profissional de saúde para avaliar sua aptidão física\n' +
+              '- Se você não é ativo, comece com atividades de intensidade leve\n' +
+              '- Respeite os limites do seu corpo e interrompa a atividade se sentir dor no peito, tontura ou qualquer desconforto\n' +
+              '- Lembre-se de se hidratar bem durante o dia\n\n' +
               'Para te orientar melhor, qual é a sua faixa etária?\n\n' +
               '1) Criança (até 5 anos)\n' +
               '2) Criança e adolescente (6 a 17 anos)\n' +
@@ -546,12 +548,11 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '👶 A atividade física pode fazer parte de vários momentos do dia da criança:\n\n' +
-              '🚶 No deslocamento\n' +
-              '📚 Na escola\n' +
-              '🏠 Nas brincadeiras em casa\n' +
-              '🎮 No tempo livre\n\n' +
-              'De maneira geral, é recomendado que crianças de até 5 anos se movimentem de forma ativa ao longo do dia, com brincadeiras livres e atividades lúdicas.',
+              '👶 Criança (até 5 anos):\n\n' +
+              '- Crianças de até 1 ano: realizar pelo menos 30 minutos por dia, estimulando movimentos de barriga para baixo, que podem ser distribuídos ao longo do dia.\n\n' +
+              '- Crianças de 1 a 2 anos: praticar pelo menos 3 horas por dia de atividades físicas. Exemplos: engatinhar, rastejar, rolar, sentar e levantar.\n\n' +
+              '- Crianças de 3 a 5 anos: realizar pelo menos 3 horas de atividades físicas por dia. Atividades como natação, ginástica, artes marciais, danças e brincadeiras ativas no recreio escolar.\n\n' +
+              'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -560,13 +561,11 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🧒 A atividade física pode fazer parte de vários momentos do dia:\n\n' +
-              '🚶 No deslocamento\n' +
-              '📚 No trabalho/escola\n' +
-              '🏠 Nas tarefas domésticas\n' +
-              '🎮 No tempo livre\n\n' +
-              'De maneira geral, é recomendado 60 minutos de atividade física moderada a intensa por dia para crianças e adolescentes de 6 a 17 anos.\n\n' +
-              'Importante incluir exercícios de fortalecimento muscular pelo menos 2 vezes por semana.',
+              '🧒 Criança e Adolescente (6 a 17 anos):\n\n' +
+              '- Praticar pelo menos 60 minutos por dia — dê preferência a atividades que façam a respiração e os batimentos do coração aumentarem. Exemplos: Caminhar, correr, nadar, pedalar (andar de bicicleta), jogar futebol, jogar vôlei.\n\n' +
+              '- Incluir pelo menos 3 dias na semana para Fortalecimento muscular e ósseo (saltar, pular corda, puxar ou empurrar - cabo de guerra)\n\n' +
+              '- A cada 1h, movimente-se 5 minutos — reduza o tempo sentado ou deitado usando o celular ou assistindo TV.\n\n' +
+              'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -575,13 +574,11 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🧑 A atividade física pode fazer parte de vários momentos do seu dia:\n\n' +
-              '🚶 No deslocamento\n' +
-              '💼 No trabalho\n' +
-              '🏠 Nas tarefas domésticas\n' +
-              '🎮 No tempo livre\n\n' +
-              'De maneira geral, é recomendado 150 minutos por semana de atividade física moderada ou 75 minutos por semana de atividade intensa.\n\n' +
-              'Importante incluir exercícios de fortalecimento muscular pelo menos 2 vezes por semana.',
+              '🧑 Adulto:\n\n' +
+              '- Praticar pelo menos 150 minutos por semana de (moderada) ou pelo menos 75 minutos por semana (vigorosa)\n\n' +
+              '- Incluir pelo menos 2 dias na semana — Fortalecimento muscular (musculação e exercícios com peso do corpo)\n\n' +
+              '- A cada 1h, movimente-se 5 minutos — reduza o tempo sentado ou deitado usando o celular ou assistindo TV.\n\n' +
+              'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -590,17 +587,133 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '👴 A atividade física pode fazer parte de vários momentos do seu dia:\n\n' +
-              '🚶 No deslocamento\n' +
-              '🏠 Nas tarefas domésticas\n' +
-              '🎮 No tempo livre\n\n' +
-              'De maneira geral, é recomendado 150 minutos por semana de atividade física moderada ou 75 minutos por semana de atividade intensa.\n\n' +
-              'Importante incluir exercícios de equilíbrio e fortalecimento muscular pelo menos 3 vezes por semana para prevenção de quedas.',
+              '👴 Pessoa Idosa (60+):\n\n' +
+              '- Praticar pelo menos 150 minutos por semana de atividade física moderada (caminhada, hidroginástica) ou pelo menos 75 minutos por semana de atividade mais intensa (corrida, ciclismo).\n\n' +
+              '- Incluir 2 a 3 vezes por semana em dias alternados — Exercícios para fortalecimento muscular (musculação orientada e exercícios com o peso do corpo) e equilíbrio\n\n' +
+              '- A cada 1h, levante-se e movimente-se por 5 minutos.\n\n' +
+              '- Atividades sugeridas: Caminhadas, programas orientados (musculação, hidroginástica, alongamentos ou dança), jogos ativos (sinuca), cuidar das plantas, passear com animal de estimação, entre outros.\n\n' +
+              '- Respeitar os próprios limites e adaptar a intensidade conforme a condição física.\n' +
+              '- Priorizar equilíbrio, coordenação e força.\n\n' +
+              'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
             ],
           })),
           always: { target: 'still_need_help' },
         },
 
+        quick_guidance_doacao_sangue: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '❤️ Que bom que você quer saber sobre doação de sangue! Qual orientação deseja receber?\n\n' +
+              '1) Quem pode doar?\n' +
+              '2) Onde doar?\n' +
+              '3) Como funciona a doação?\n' +
+              '4) Cuidados antes da doação\n' +
+              '5) Impedimentos temporários',
+            ],
+          })),
+          on: {
+            QUEM_PODE_DOAR:     'quick_guidance_doacao_quem',
+            ONDE_DOAR:          'quick_guidance_doacao_onde',
+            COMO_FUNCIONA:      'quick_guidance_doacao_como',
+            CUIDADOS_ANTES:     'quick_guidance_doacao_cuidados',
+            IMPEDIMENTOS:       'quick_guidance_doacao_impedimentos',
+            USER_INPUT:         'quick_guidance_doacao_sangue',
+          },
+        },
+        quick_guidance_doacao_quem: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '1️⃣ Quem pode doar?\n\n' +
+              '- Pessoas entre 16 e 69 anos\n' +
+              '- Menores de 18 anos precisam de autorização do responsável\n' +
+              '- Pesar mais de 50 kg\n' +
+              '- Estar em boas condições de saúde\n' +
+              '- Estar alimentado (evite alimentos gordurosos nas 4h que antecedem) e descansado\n' +
+              '- Apresentar documento oficial com foto\n' +
+              '- Homens podem doar sangue a cada 3 meses, até 4 vezes ao ano. Já as mulheres podem doar a cada 4 meses, até 3 vezes ao ano.',
+            ],
+          })),
+          always: { target: 'quick_guidance_doacao_retorno' },
+        },
+        quick_guidance_doacao_onde: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '2️⃣ Onde doar?\n\n' +
+              '🏥 HEMOPE - PETROLINA\n' +
+              'Rua Pacífico da Luz, s/n – Centro, Petrolina-PE\n\n' +
+              '🕐 Horário de Atendimento:\n' +
+              'Segunda a sexta-feira 7h30 às 11h30\n\n' +
+              '📞 Telefone: (87) 3182-5866 | (87) 3866-6601',
+            ],
+          })),
+          always: { target: 'quick_guidance_doacao_retorno' },
+        },
+        quick_guidance_doacao_como: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '3️⃣ Como funciona a doação?\n\n' +
+              '- Primeiro é realizado cadastro e triagem\n' +
+              '- Depois ocorre entrevista e avaliação clínica\n' +
+              '- A coleta dura cerca de 10 a 15 minutos\n' +
+              '- São doados aproximadamente 450 ml de sangue\n' +
+              '- Todo material utilizado é descartável e seguro',
+            ],
+          })),
+          always: { target: 'quick_guidance_doacao_retorno' },
+        },
+        quick_guidance_doacao_cuidados: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '4️⃣ Cuidados antes da doação:\n\n' +
+              '- Beba bastante líquido nas 24h antes\n' +
+              '- Faça refeições leves e evite alimentos gordurosos nas últimas horas\n' +
+              '- Não ingerir bebida alcoólica nas últimas 12h\n' +
+              '- Durma bem na noite anterior',
+            ],
+          })),
+          always: { target: 'quick_guidance_doacao_retorno' },
+        },
+        quick_guidance_doacao_impedimentos: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '5️⃣ Impedimentos temporários:\n\n' +
+              '- Gripe, resfriado ou processo alérgico — aguardar 7 dias após desaparecimento dos sintomas\n' +
+              '- Uso de antibiótico nos últimos 15 dias\n' +
+              '- Gravidez ou suspeita de gestação\n' +
+              '- Amamentação antes de 12 meses após o parto\n' +
+              '- Tatuagem, piercing ou micropigmentação nos últimos 12 meses\n' +
+              '- Piercing oral ou genital sem 12 meses da retirada\n' +
+              '- Ter se exposto a situações de risco para IST/AIDS.',
+            ],
+          })),
+          always: { target: 'quick_guidance_doacao_retorno' },
+        },
+        quick_guidance_doacao_retorno: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '❤️ Doar sangue salva vidas!\n\n' +
+              'Deseja receber outra orientação?\n\n' +
+              '1) Voltar ao menu - Doação de Sangue\n' +
+              '2) Voltar ao menu - Orientações completa\n' +
+              '3) Não - Encerrar',
+            ],
+          })),
+          on: {
+            VOLTAR_DOACAO:     'quick_guidance_doacao_sangue',
+            VOLTAR_ORIENTACOES: 'quick_guidance_flow',
+            ENCERRAR:          'end_session',
+            USER_INPUT:        'quick_guidance_doacao_retorno',
+          },
+        },
+
+        // ── Estados finais compartilhados ──
         still_need_help: {
           entry: assign(({ context }) => ({
             responses: [...context.responses, `Há mais algo em que eu possa ajudar?`],

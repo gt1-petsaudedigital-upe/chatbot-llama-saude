@@ -126,6 +126,8 @@ export class MachineService {
         return 'PSICOLOGIA';
       if (trimmed === '5' || normalized.includes('atividade') || normalized.includes('fisica') || normalized.includes('exercicio'))
         return 'ATIVIDADE_FISICA';
+      if (trimmed === '6' || normalized.includes('doacao') || normalized.includes('sangue'))
+        return 'DOACAO_SANGUE';
     }
 
     if (lastState === 'quick_guidance_nutricao') {
@@ -151,7 +153,6 @@ export class MachineService {
         return 'FEBRE';
     }
 
-
     if (lastState === 'quick_guidance_psicologia') {
       if (trimmed === '1' || normalized.includes('ansiedade') || normalized.includes('stress') || normalized.includes('estresse'))
         return 'ANSIEDADE_STRESS';
@@ -170,6 +171,28 @@ export class MachineService {
         return 'ADULTO';
       if (trimmed === '4' || normalized.includes('idoso') || normalized.includes('terceira idade') || normalized.includes('velho'))
         return 'IDOSO';
+    }
+
+    if (lastState === 'quick_guidance_doacao_sangue') {
+      if (trimmed === '1' || normalized.includes('quem') || normalized.includes('pode doar'))
+        return 'QUEM_PODE_DOAR';
+      if (trimmed === '2' || normalized.includes('onde'))
+        return 'ONDE_DOAR';
+      if (trimmed === '3' || normalized.includes('como') || normalized.includes('funciona'))
+        return 'COMO_FUNCIONA';
+      if (trimmed === '4' || normalized.includes('cuidado') || normalized.includes('antes'))
+        return 'CUIDADOS_ANTES';
+      if (trimmed === '5' || normalized.includes('impedimento') || normalized.includes('temporario'))
+        return 'IMPEDIMENTOS';
+    }
+
+    if (lastState === 'quick_guidance_doacao_retorno') {
+      if (trimmed === '1' || normalized.includes('doacao') || normalized.includes('sangue'))
+        return 'VOLTAR_DOACAO';
+      if (trimmed === '2' || normalized.includes('orientacao') || normalized.includes('completa'))
+        return 'VOLTAR_ORIENTACOES';
+      if (trimmed === '3' || normalized.includes('nao') || normalized.includes('encerrar'))
+        return 'ENCERRAR';
     }
 
     const YES_VARIANTS = ['sim', 's', 'si', 'yes', 'y', 'claro', 'quero', 'afirmativo', 'com certeza', 'pode ser'];
