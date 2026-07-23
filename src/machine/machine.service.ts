@@ -18,13 +18,8 @@ export class MachineService {
   ) {}
 
   public async getOrCreateActor(sessionId: string): Promise<ChatflowActor> {
-    if (this.actors[sessionId]) {
-      return this.actors[sessionId];
-    }
-
-    if (sessionId in this.pending) {
-      return this.pending[sessionId];
-    }
+    if (this.actors[sessionId]) return this.actors[sessionId];
+    if (sessionId in this.pending) return this.pending[sessionId];
 
     this.pending[sessionId] = (async () => {
       const machine = createChatflowMachine(this.groqService);
@@ -59,27 +54,19 @@ export class MachineService {
     return this.pending[sessionId];
   }
 
-  public async interpretMessage(
-    sessionId: string,
-    message: string,
-  ): Promise<string[]> {
+  public async interpretMessage(sessionId: string, message: string): Promise<string[]> {
     this.logger.log('Starting machine message interpretation');
     const actor = await this.getOrCreateActor(sessionId);
 
     const snapshot = actor.getSnapshot();
     const lastStateValue = snapshot.value;
-
     const eventType = this.mapInputToEvent(message, lastStateValue as string);
 
     actor.send({ type: eventType as string, value: message });
-
     await this.sleep(1200);
 
     const updatedSnapshot = actor.getSnapshot();
-
-    this.logger.log('Obtaining messages from the machine');
     const responses = updatedSnapshot.context.responses || [];
-
     actor.send({ type: 'CLEAR_RESPONSES' });
 
     this.logger.log('Sending responses to the chatbot');
@@ -87,11 +74,7 @@ export class MachineService {
   }
 
   private normalize(input: string): string {
-    return input
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
+    return input.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   }
 
   private mapInputToEvent(input: string, lastState: string): string {
@@ -111,8 +94,25 @@ export class MachineService {
     if (lastState === 'schedule_appointment_flow') {
       if (trimmed === '1' || normalized.includes('agendar'))
         return 'SCHEDULE';
-      if (trimmed === '2' || normalized.includes('verificar') || normalized.includes('ver'))
+      if (trimmed === '2' || normalized.includes('datas') || normalized.includes('funcionamento'))
+        return 'DATAS_SERVICO';
+      if (trimmed === '3' || normalized.includes('verificar') || normalized.includes('ver'))
         return 'VERIFY';
+    }
+
+    if (lastState === 'datas_servico_flow') {
+      if (trimmed === '1' || normalized.includes('medico') || normalized.includes('medica'))
+        return 'SERVICO_MEDICO';
+      if (trimmed === '2' || normalized.includes('enfermagem'))
+        return 'SERVICO_ENFERMAGEM';
+      if (trimmed === '3' || normalized.includes('fisioterapia') || normalized.includes('fisio'))
+        return 'SERVICO_FISIOTERAPIA';
+      if (trimmed === '4' || normalized.includes('odontologia') || normalized.includes('dente') || normalized.includes('dentista'))
+        return 'SERVICO_ODONTOLOGIA';
+      if (trimmed === '5' || normalized.includes('psicologia') || normalized.includes('psico'))
+        return 'SERVICO_PSICOLOGIA';
+      if (trimmed === '6' || normalized.includes('nutricao') || normalized.includes('nutri'))
+        return 'SERVICO_NUTRICAO';
     }
 
     if (lastState === 'quick_guidance_flow') {
@@ -140,7 +140,7 @@ export class MachineService {
     if (lastState === 'quick_guidance_fisioterapia') {
       if (trimmed === '1' || normalized.includes('postura') || normalized.includes('coluna'))
         return 'POSTURA';
-      if (trimmed === '2' || normalized.includes('queda') || normalized.includes('prevencao') || normalized.includes('idoso'))
+      if (trimmed === '2' || normalized.includes('queda') || normalized.includes('prevencao'))
         return 'PREVENCAO_QUEDAS';
       if (trimmed === '3' || normalized.includes('gelo') || normalized.includes('calor') || normalized.includes('compressa'))
         return 'GELO_OU_CALOR';
@@ -163,13 +163,13 @@ export class MachineService {
     }
 
     if (lastState === 'quick_guidance_atividade_fisica') {
-      if (trimmed === '1' || normalized.includes('bebe') || normalized.includes('ate 5') || (normalized.includes('crianca') && normalized.includes('peque')))
+      if (trimmed === '1' || normalized.includes('bebe') || normalized.includes('ate 5'))
         return 'CRIANCA_ATE_5';
-      if (trimmed === '2' || normalized.includes('adolescente') || (normalized.includes('crianca') && !normalized.includes('peque')))
+      if (trimmed === '2' || normalized.includes('adolescente') || normalized.includes('crianca'))
         return 'CRIANCA_ATE_17';
       if (trimmed === '3' || normalized.includes('adulto'))
         return 'ADULTO';
-      if (trimmed === '4' || normalized.includes('idoso') || normalized.includes('terceira idade') || normalized.includes('velho'))
+      if (trimmed === '4' || normalized.includes('idoso') || normalized.includes('terceira idade'))
         return 'IDOSO';
     }
 
@@ -191,7 +191,7 @@ export class MachineService {
         return 'VOLTAR_DOACAO';
       if (trimmed === '2' || normalized.includes('orientacao') || normalized.includes('completa'))
         return 'VOLTAR_ORIENTACOES';
-      if (trimmed === '3' || normalized.includes('nao') || normalized.includes('encerrar'))
+      if (trimmed === '3' || normalized.includes('encerrar'))
         return 'ENCERRAR';
     }
 

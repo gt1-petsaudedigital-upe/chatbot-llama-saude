@@ -5,6 +5,24 @@ import { Logger } from '@nestjs/common';
 
 const logger = new Logger(StateMachine.name);
 
+// ── Datas fictícias por serviço ──
+const DATAS_SERVICOS: Record<string, string> = {
+  medico:       'Segunda e Quarta: 07h30 às 11h30 | Sexta: 07h30 às 10h30',
+  enfermagem:   'Segunda a Sexta: 07h00 às 12h00',
+  fisioterapia: 'Terça e Quinta: 08h00 às 12h00 | 13h00 às 17h00',
+  odontologia:  'Segunda, Quarta e Sexta: 07h30 às 11h30',
+  psicologia:   'Terça e Quinta: 08h00 às 12h00',
+  nutricao:     'Segunda e Quarta: 13h00 às 17h00',
+};
+
+const UBS_PETROLINA = [
+  '🏥 UBS Antônio Cassimiro – Av. Cardoso de Sá, s/n – Bairro Jardim Aeroporto',
+  '🏥 UBS José de Anchieta – R. Cel. Amorim, s/n – Bairro Vila Eduardo',
+  '🏥 UBS Domingos Barbosa – R. José Pereira, s/n – Bairro Cohab',
+  '🏥 UBS Maria Auxiliadora – R. São João, s/n – Bairro Areia Branca',
+  '🏥 UBS Afrânio Moura – Av. Cardeal, s/n – Bairro São Gonçalo',
+];
+
 export const createChatflowMachine = (groqService: GroqService) =>
   createMachine(
     {
@@ -154,14 +172,16 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              `Ok! \nVocê deseja: \n\n1) Agendar uma consulta \n\n2) Ver consultas agendadas`,
+              'Ok! Você deseja:\n\n1) Agendar uma consulta\n2) Ver datas de funcionamento dos serviços\n3) Ver consultas agendadas',
             ],
           })),
           on: {
-            SCHEDULE: 'schedule_appointment_menu',
-            VERIFY:   'query_appointment',
+            SCHEDULE:        'schedule_appointment_menu',
+            DATAS_SERVICO:   'datas_servico_flow',
+            VERIFY:          'query_appointment',
           },
         },
+
         schedule_appointment_menu: {
           entry: assign(({ context }) => ({
             responses: [
@@ -243,11 +263,11 @@ export const createChatflowMachine = (groqService: GroqService) =>
               scheduledDateOptions,
             }),
             onDone: {
-              target: 'still_need_help',
+              target: 'schedule_lembrete',
               actions: assign(({ event, context }) => ({
                 responses: [
                   ...context.responses,
-                  `Agendamento feito!\n Seu agendamento ficou para o dia ${event.output.date} às ${event.output.time}`,
+                  `Agendamento feito!\nSeu agendamento ficou para o dia ${event.output.date} às ${event.output.time}`,
                 ],
                 userInput: undefined,
               })),
@@ -269,7 +289,131 @@ export const createChatflowMachine = (groqService: GroqService) =>
             NO:  'still_need_help',
           },
         },
+        schedule_lembrete: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              'Gostaria de ser lembrado(a) da data por e-mail ou SMS?',
+            ],
+          })),
+          on: {
+            YES: 'schedule_lembrete_confirmado',
+            NO:  'schedule_ubs',
+          },
+        },
+        schedule_lembrete_confirmado: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '✅ Certo! Você será lembrado(a) da data do seu agendamento.',
+            ],
+          })),
+          always: { target: 'schedule_ubs' },
+        },
+        schedule_ubs: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              'Deseja saber qual a UBS ou serviço mais próximo de você?',
+            ],
+          })),
+          on: {
+            YES: 'schedule_ubs_lista',
+            NO:  'still_need_help',
+          },
+        },
+        schedule_ubs_lista: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '📍 Algumas UBS de Petrolina:\n\n' +
+              UBS_PETROLINA.join('\n') +
+              '\n\n⚠️ Para encontrar a UBS mais próxima de você, acesse o aplicativo Meu SUS Digital ou ligue para o telefone da sua unidade de referência.',
+            ],
+          })),
+          always: { target: 'still_need_help' },
+        },
         query_appointment: {},
+
+        // ── Fluxo 2b - Datas de funcionamento dos serviços ──
+        datas_servico_flow: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '📅 Qual serviço você gostaria de saber as datas de funcionamento?\n\n1) Médico\n2) Enfermagem\n3) Fisioterapia\n4) Odontologia\n5) Psicologia\n6) Nutrição',
+            ],
+          })),
+          on: {
+            SERVICO_MEDICO:       'datas_servico_resultado',
+            SERVICO_ENFERMAGEM:   'datas_servico_resultado',
+            SERVICO_FISIOTERAPIA: 'datas_servico_resultado',
+            SERVICO_ODONTOLOGIA:  'datas_servico_resultado',
+            SERVICO_PSICOLOGIA:   'datas_servico_resultado',
+            SERVICO_NUTRICAO:     'datas_servico_resultado',
+            USER_INPUT:           'datas_servico_flow',
+          },
+        },
+        datas_servico_resultado: {
+          entry: assign(({ context }) => {
+            const servico = context.userInput as string;
+            const datas = DATAS_SERVICOS[servico] || 'Datas não disponíveis no momento.';
+            const nomes: Record<string, string> = {
+              medico: 'Médico', enfermagem: 'Enfermagem', fisioterapia: 'Fisioterapia',
+              odontologia: 'Odontologia', psicologia: 'Psicologia', nutricao: 'Nutrição',
+            };
+            return {
+              responses: [
+                ...context.responses,
+                `📅 Datas de funcionamento — ${nomes[servico] || 'Serviço'}:\n\n${datas}\n\n⚠️ Atenção: as datas apresentadas são para que o usuário vá até o serviço de forma presencial para agendar a data de atendimento.`,
+              ],
+            };
+          }),
+          always: { target: 'datas_servico_lembrete' },
+        },
+        datas_servico_lembrete: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              'Gostaria de ser lembrado(a) da data por e-mail ou SMS?',
+            ],
+          })),
+          on: {
+            YES: 'datas_servico_lembrete_confirmado',
+            NO:  'datas_servico_ubs',
+          },
+        },
+        datas_servico_lembrete_confirmado: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '✅ Certo! Você será lembrado(a) da data do serviço.',
+            ],
+          })),
+          always: { target: 'datas_servico_ubs' },
+        },
+        datas_servico_ubs: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              'Deseja saber qual a UBS ou serviço mais próximo de você?',
+            ],
+          })),
+          on: {
+            YES: 'datas_servico_ubs_lista',
+            NO:  'still_need_help',
+          },
+        },
+        datas_servico_ubs_lista: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '📍 Algumas UBS de Petrolina:\n\n' +
+              UBS_PETROLINA.join('\n') +
+              '\n\n⚠️ Para encontrar a UBS mais próxima de você, acesse o aplicativo Meu SUS Digital ou ligue para o telefone da sua unidade de referência.',
+            ],
+          })),
+          always: { target: 'still_need_help' },
+        },
 
         quick_guidance_flow: {
           entry: assign(({ context }) => ({
@@ -308,12 +452,8 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '🟡 Prefira alimentos naturais no dia a dia: arroz, feijão, verduras, legumes, frutas, ovos e carnes.\n\n' +
-              '🔵 No almoço e jantar:\n' +
-              '- Combine arroz + feijão\n' +
-              '- Inclua verduras e legumes\n' +
-              '- Acrescente uma proteína (carne, frango, peixe ou ovo)\n\n' +
-              '🟡 No café da manhã:\n' +
-              '- Opte por alimentos simples como cuscuz, tapioca, pão ou frutas\n\n' +
+              '🔵 No almoço e jantar:\n- Combine arroz + feijão\n- Inclua verduras e legumes\n- Acrescente uma proteína (carne, frango, peixe ou ovo)\n\n' +
+              '🟡 No café da manhã:\n- Opte por alimentos simples como cuscuz, tapioca, pão ou frutas\n\n' +
               '🔵 Procure fazer as refeições com calma e em horários regulares.\n\n' +
               '⚠️ Evite alimentos ultraprocessados (refrigerantes, salgadinhos, biscoitos recheados, embutidos) e excesso de sal e açúcar.\n\n' +
               'Fonte: Ministério da Saúde – Guia Alimentar para a População Brasileira.',
@@ -444,10 +584,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               ...context.responses,
               '🌡️ Febre é quando a temperatura corporal está igual ou acima de 37,5°C, em qualquer idade.\n\n' +
               'Na maioria dos casos, você pode começar com cuidados em casa:\n' +
-              '- Hidrate-se\n' +
-              '- Descanse\n' +
-              '- Use roupas leves\n' +
-              '- Pode tomar banho morno\n\n' +
+              '- Hidrate-se\n- Descanse\n- Use roupas leves\n- Pode tomar banho morno\n\n' +
               '🚫 O que evitar:\n' +
               '- Evite tomar medicamentos sem orientação de um profissional de saúde\n' +
               '- Não use álcool ou água gelada no corpo\n' +
@@ -530,10 +667,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               '- Respeite os limites do seu corpo e interrompa a atividade se sentir dor no peito, tontura ou qualquer desconforto\n' +
               '- Lembre-se de se hidratar bem durante o dia\n\n' +
               'Para te orientar melhor, qual é a sua faixa etária?\n\n' +
-              '1) Criança (até 5 anos)\n' +
-              '2) Criança e adolescente (6 a 17 anos)\n' +
-              '3) Adulto\n' +
-              '4) Pessoa idosa',
+              '1) Criança (até 5 anos)\n2) Criança e adolescente (6 a 17 anos)\n3) Adulto\n4) Pessoa idosa',
             ],
           })),
           on: {
@@ -562,7 +696,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '🧒 Criança e Adolescente (6 a 17 anos):\n\n' +
-              '- Praticar pelo menos 60 minutos por dia — dê preferência a atividades que façam a respiração e os batimentos do coração aumentarem. Exemplos: Caminhar, correr, nadar, pedalar (andar de bicicleta), jogar futebol, jogar vôlei.\n\n' +
+              '- Praticar pelo menos 60 minutos por dia — dê preferência a atividades que façam a respiração e os batimentos do coração aumentarem. Exemplos: Caminhar, correr, nadar, pedalar, jogar futebol, jogar vôlei.\n\n' +
               '- Incluir pelo menos 3 dias na semana para Fortalecimento muscular e ósseo (saltar, pular corda, puxar ou empurrar - cabo de guerra)\n\n' +
               '- A cada 1h, movimente-se 5 minutos — reduza o tempo sentado ou deitado usando o celular ou assistindo TV.\n\n' +
               'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
@@ -589,9 +723,9 @@ export const createChatflowMachine = (groqService: GroqService) =>
               ...context.responses,
               '👴 Pessoa Idosa (60+):\n\n' +
               '- Praticar pelo menos 150 minutos por semana de atividade física moderada (caminhada, hidroginástica) ou pelo menos 75 minutos por semana de atividade mais intensa (corrida, ciclismo).\n\n' +
-              '- Incluir 2 a 3 vezes por semana em dias alternados — Exercícios para fortalecimento muscular (musculação orientada e exercícios com o peso do corpo) e equilíbrio\n\n' +
+              '- Incluir 2 a 3 vezes por semana em dias alternados — Exercícios para fortalecimento muscular e equilíbrio\n\n' +
               '- A cada 1h, levante-se e movimente-se por 5 minutos.\n\n' +
-              '- Atividades sugeridas: Caminhadas, programas orientados (musculação, hidroginástica, alongamentos ou dança), jogos ativos (sinuca), cuidar das plantas, passear com animal de estimação, entre outros.\n\n' +
+              '- Atividades sugeridas: Caminhadas, musculação, hidroginástica, alongamentos ou dança, jogos ativos, cuidar das plantas, passear com animal de estimação.\n\n' +
               '- Respeitar os próprios limites e adaptar a intensidade conforme a condição física.\n' +
               '- Priorizar equilíbrio, coordenação e força.\n\n' +
               'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
@@ -605,20 +739,16 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '❤️ Que bom que você quer saber sobre doação de sangue! Qual orientação deseja receber?\n\n' +
-              '1) Quem pode doar?\n' +
-              '2) Onde doar?\n' +
-              '3) Como funciona a doação?\n' +
-              '4) Cuidados antes da doação\n' +
-              '5) Impedimentos temporários',
+              '1) Quem pode doar?\n2) Onde doar?\n3) Como funciona a doação?\n4) Cuidados antes da doação\n5) Impedimentos temporários',
             ],
           })),
           on: {
-            QUEM_PODE_DOAR:     'quick_guidance_doacao_quem',
-            ONDE_DOAR:          'quick_guidance_doacao_onde',
-            COMO_FUNCIONA:      'quick_guidance_doacao_como',
-            CUIDADOS_ANTES:     'quick_guidance_doacao_cuidados',
-            IMPEDIMENTOS:       'quick_guidance_doacao_impedimentos',
-            USER_INPUT:         'quick_guidance_doacao_sangue',
+            QUEM_PODE_DOAR: 'quick_guidance_doacao_quem',
+            ONDE_DOAR:      'quick_guidance_doacao_onde',
+            COMO_FUNCIONA:  'quick_guidance_doacao_como',
+            CUIDADOS_ANTES: 'quick_guidance_doacao_cuidados',
+            IMPEDIMENTOS:   'quick_guidance_doacao_impedimentos',
+            USER_INPUT:     'quick_guidance_doacao_sangue',
           },
         },
         quick_guidance_doacao_quem: {
@@ -644,8 +774,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               '2️⃣ Onde doar?\n\n' +
               '🏥 HEMOPE - PETROLINA\n' +
               'Rua Pacífico da Luz, s/n – Centro, Petrolina-PE\n\n' +
-              '🕐 Horário de Atendimento:\n' +
-              'Segunda a sexta-feira 7h30 às 11h30\n\n' +
+              '🕐 Horário de Atendimento:\nSegunda a sexta-feira 7h30 às 11h30\n\n' +
               '📞 Telefone: (87) 3182-5866 | (87) 3866-6601',
             ],
           })),
@@ -706,14 +835,13 @@ export const createChatflowMachine = (groqService: GroqService) =>
             ],
           })),
           on: {
-            VOLTAR_DOACAO:     'quick_guidance_doacao_sangue',
+            VOLTAR_DOACAO:      'quick_guidance_doacao_sangue',
             VOLTAR_ORIENTACOES: 'quick_guidance_flow',
-            ENCERRAR:          'end_session',
-            USER_INPUT:        'quick_guidance_doacao_retorno',
+            ENCERRAR:           'end_session',
+            USER_INPUT:         'quick_guidance_doacao_retorno',
           },
         },
 
-        // ── Estados finais compartilhados ──
         still_need_help: {
           entry: assign(({ context }) => ({
             responses: [...context.responses, `Há mais algo em que eu possa ajudar?`],
@@ -751,8 +879,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               const prompt: ChatMessage[] = [
                 {
                   role: 'system',
-                  content:
-                    'Analise os sintomas e classifique como leves ou graves. Retorne apenas: {"response": "Sua resposta", "nextState": "health_issue_mild_symptoms" ou "health_issue_severe_symptoms"}',
+                  content: 'Analise os sintomas e classifique como leves ou graves. Retorne apenas: {"response": "Sua resposta", "nextState": "health_issue_mild_symptoms" ou "health_issue_severe_symptoms"}',
                 },
                 { role: 'user', content: input },
               ];
@@ -783,9 +910,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             const data2 = new Date(today); data2.setDate(today.getDate() + 10);
             const data3 = new Date(today); data3.setDate(today.getDate() + 15);
             const hour = new Date(today); hour.setHours(14, 0);
-
-            const fmt = (h: Date) =>
-              `${h.getHours()}:${h.getMinutes() < 10 ? `0${h.getMinutes()}` : h.getMinutes()}`;
+            const fmt = (h: Date) => `${h.getHours()}:${h.getMinutes() < 10 ? `0${h.getMinutes()}` : h.getMinutes()}`;
 
             const scheduleOptions = [
               { data: data1.toLocaleDateString(), hora: fmt(hour) },
@@ -794,7 +919,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             ];
 
             const response =
-              'Certo!\n\n Para essa modalidade temos: \n\n' +
+              'Certo!\n\nPara essa modalidade temos:\n\n' +
               scheduleOptions.map((o) => `- ${o.data} às ${o.hora}`).join('\n') +
               '\nQual a sua disponibilidade?';
 
@@ -803,9 +928,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
         }),
         extractChosenDate: fromPromise(async ({ input }: { input: any }) => {
           try {
-            const availableDatesList = input.availableDates
-              .map((d) => `${d.data} às ${d.hora}`)
-              .join(', ');
+            const availableDatesList = input.availableDates.map((d) => `${d.data} às ${d.hora}`).join(', ');
             const prompt: ChatMessage[] = [
               {
                 role: 'system',
