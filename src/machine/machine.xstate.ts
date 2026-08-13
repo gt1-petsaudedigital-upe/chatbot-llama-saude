@@ -5,7 +5,6 @@ import { Logger } from '@nestjs/common';
 
 const logger = new Logger(StateMachine.name);
 
-//  Datas fictícias por serviço (algo pedido pelo chefe)
 const DATAS_SERVICOS: Record<string, string> = {
   medico:       'Segunda e Quarta: 07h30 às 11h30 | Sexta: 07h30 às 10h30',
   enfermagem:   'Segunda a Sexta: 07h00 às 12h00',
@@ -23,7 +22,6 @@ const UBS_PETROLINA = [
   '🏥 UBS Afrânio Moura – Av. Cardeal, s/n – Bairro São Gonçalo',
 ];
 
-// Bairros fictícios, pra usar como modelo pronto (algo pedido pelo chefe)
 const UBS_POR_BAIRRO: Record<string, string> = {
   'jardim aeroporto': '🏥 UBS Antônio Cassimiro – Av. Cardoso de Sá, s/n – Bairro Jardim Aeroporto\n📞 (87) 3866-0000',
   'vila eduardo':     '🏥 UBS José de Anchieta – R. Cel. Amorim, s/n – Bairro Vila Eduardo\n📞 (87) 3866-1111',
@@ -56,23 +54,14 @@ export const createChatflowMachine = (groqService: GroqService) =>
           sex: '',
           hasHealthProfessionalName: false,
           healthProfessionalName: '',
-          address: {
-            neighborhood: '',
-            street: '',
-            number: '',
-            complement: '',
-          },
+          address: { neighborhood: '', street: '', number: '', complement: '' },
         },
       },
       on: {
-        CLEAR_RESPONSES: {
-          actions: [assign({ responses: [] })],
-        },
+        CLEAR_RESPONSES: { actions: [assign({ responses: [] })] },
       },
       states: {
-        start: {
-          always: { target: 'load_user' },
-        },
+        start: { always: { target: 'load_user' } },
 
         load_user: {
           on: {
@@ -88,256 +77,103 @@ export const createChatflowMachine = (groqService: GroqService) =>
                   sex: event.value.sex || '',
                   hasHealthProfessionalName: event.value.hasHealthProfessionalName,
                   healthProfessionalName: event.value.healthProfessionalName || '',
-                  address: {
-                    neighborhood: '',
-                    street: '',
-                    number: '',
-                    complement: '',
-                  },
+                  address: { neighborhood: '', street: '', number: '', complement: '' },
                 },
-                responses: [
-                  `Olá, **${event.value.name}**! Seus dados foram carregados com sucesso.`,
-                ],
+                responses: [`Olá, **${event.value.name}**! Seus dados foram carregados com sucesso.`],
               })),
             },
           },
         },
-
         menu: {
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
               'Bem-vindo ao menu de serviços!',
-              'Você gostaria de:\n1) Agendar ou confirmar uma consulta ou procedimento\n2) Orientações rápidas\n3) Farmácia\n4) Vacinação',
+              'Você gostaria de:\n1) Orientações rápidas\n2) Fluxo de encaminhamento (Onde procurar atendimento)\n3) Vacinação\n4) Farmácia\n5) Agendar ou confirmar uma consulta ou procedimento',
             ],
           })),
           on: {
-            SCHEDULE_APPOINTMENT: 'schedule_appointment_flow',
             QUICK_GUIDANCE:       'quick_guidance_flow',
-            FARMACIA:             'farmacia_flow',
+            ENCAMINHAMENTO:       'encaminhamento_flow',
             VACINACAO:            'vacinacao_flow',
+            FARMACIA:             'farmacia_flow',
+            SCHEDULE_APPOINTMENT: 'schedule_appointment_flow',
           },
         },
-
-        schedule_appointment_flow: {
+        encaminhamento_flow: {
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              'Ok! Você deseja:\n\n1) Agendar uma consulta\n2) Ver datas de funcionamento dos serviços\n3) Ver consultas agendadas',
+              '🚨 Vou te fazer algumas perguntas rápidas. Responda **SIM** caso sinta qualquer uma destas ou **NÃO** caso nenhuma se aplique, por favor.\n\n' +
+              '- Dor muito forte no peito? É uma crise hipertensiva?\n' +
+              '- Está com muita dificuldade para respirar ou sem ar?\n' +
+              '- É um acidente grave ou com produtos perigosos?\n' +
+              '- Queimadura extensa?\n' +
+              '- Choque elétrico? Afogamento?\n' +
+              '- Há um sangramento intenso que não para?\n' +
+              '- É uma queda? Teve fratura? Bateu a cabeça? A vítima está inconsciente?\n' +
+              '- Fraqueza súbita em uma parte do corpo, fala embolada ou perda de força nos braços ou nas pernas?\n' +
+              '- Está sonolento ou confuso?',
             ],
           })),
           on: {
-            SCHEDULE:      'schedule_appointment_menu',
-            DATAS_SERVICO: 'datas_servico_flow',
-            VERIFY:        'query_appointment',
+            YES: 'encaminhamento_emergencia',
+            NO:  'encaminhamento_leve_moderado',
           },
         },
-        schedule_appointment_menu: {
+        encaminhamento_emergencia: {
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              'Certo!\nO que você deseja?:\n1) Consulta médica\n2) Consulta de enfermagem\n3) Consulta e-multi (psicólogo, nutricionista, fisioterapeuta)\n4) Consulta odontológica\n5) Procedimento (ex: preventivo, DIU, administração de medicamento, realização de curativo, retirada de ponto, pequena cirurgia)',
-            ],
-          })),
-          on: {
-            USER_INPUT: {
-              target: 'appointment_search',
-              actions: assign({ userInput: ({ event }) => event.value }),
-            },
-          },
-        },
-        appointment_search: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Buscando no sistema...'],
-          })),
-          invoke: {
-            src: 'mapAppointment',
-            input: ({ context: { userInput } }) => userInput,
-            onDone: {
-              target: 'list_appointment_options',
-              actions: assign(({ event, context }) => ({
-                responses: [...context.responses, event.output.response],
-                scheduledDateOptions: event.output.scheduleOptions,
-                typeOfAppointment: event.output.typeOfAppointment,
-                userInput: undefined,
-              })),
-            },
-            onError: {
-              target: 'error',
-              actions: assign({ response: 'Erro ao buscar as datas disponíveis. Tente novamente.' }),
-            },
-          },
-        },
-        list_appointment_options: {
-          on: {
-            USER_INPUT: {
-              target: 'date_extraction',
-              actions: assign({ userInput: ({ event }) => event.value }),
-            },
-          },
-        },
-        date_extraction: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Analisando sua resposta...'],
-          })),
-          invoke: {
-            src: 'extractChosenDate',
-            input: ({ context: { userInput, scheduledDateOptions } }) => ({
-              userInput,
-              availableDates: scheduledDateOptions,
-            }),
-            onDone: {
-              target: 'try_schedule_appointment',
-              actions: assign({ chosenDate: ({ event }) => event.output.chosenDate }),
-            },
-            onError: {
-              target: 'list_appointment_options',
-              actions: assign(({ context }) => ({
-                responses: [
-                  ...context.responses,
-                  'Desculpe, não consegui identificar a data e hora na sua mensagem. Por favor, tente digitar a data exata ou o número correspondente à sua escolha.',
-                ],
-              })),
-            },
-          },
-        },
-        try_schedule_appointment: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Verificando disponibilidade da vaga...'],
-          })),
-          invoke: {
-            src: 'scheduleAppointment',
-            input: ({ context: { typeOfAppointment, chosenDate, scheduledDateOptions } }) => ({
-              typeOfAppointment,
-              chosenDate,
-              scheduledDateOptions,
-            }),
-            onDone: {
-              target: 'schedule_lembrete',
-              actions: assign(({ event, context }) => ({
-                responses: [
-                  ...context.responses,
-                  `Agendamento feito!\nSeu agendamento ficou para o dia ${event.output.date} às ${event.output.time}`,
-                ],
-                userInput: undefined,
-              })),
-            },
-            onError: {
-              target: 'schedule_error_retry',
-              actions: assign(({ context }) => ({
-                responses: [
-                  ...context.responses,
-                  'Oops!\nAo tentarmos agendar, ocorreu um erro na reserva.\nVocê gostaria de tentar novamente com outra data?',
-                ],
-              })),
-            },
-          },
-        },
-        schedule_error_retry: {
-          on: {
-            YES: 'appointment_search',
-            NO:  'still_need_help',
-          },
-        },
-        schedule_lembrete: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Gostaria de ser lembrado(a) da data por e-mail ou SMS?'],
-          })),
-          on: {
-            YES: 'schedule_lembrete_confirmado',
-            NO:  'schedule_ubs',
-          },
-        },
-        schedule_lembrete_confirmado: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, '✅ Certo! Você será lembrado(a) da data do seu agendamento.'],
-          })),
-          always: { target: 'schedule_ubs' },
-        },
-        schedule_ubs: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Deseja saber qual a UBS ou serviço mais próximo de você?'],
-          })),
-          on: {
-            YES: 'schedule_ubs_lista',
-            NO:  'still_need_help',
-          },
-        },
-        schedule_ubs_lista: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '📍 Algumas UBS de Petrolina:\n\n' + UBS_PETROLINA.join('\n') +
-              '\n\n⚠️ Para encontrar a UBS mais próxima, acesse o aplicativo Meu SUS Digital.',
+              '🚨 **Ligue para o 192 (SAMU) ou peça ajuda imediatamente.**',
             ],
           })),
           always: { target: 'still_need_help' },
         },
-        query_appointment: {},
-        datas_servico_flow: {
+        encaminhamento_leve_moderado: {
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '📅 Qual serviço você gostaria de saber as datas de funcionamento?\n\n1) Médico\n2) Enfermagem\n3) Fisioterapia\n4) Odontologia\n5) Psicologia\n6) Nutrição',
+              'Certo! Você apresenta sintomas leves a moderados?\n\n**Os sintomas leves a moderados** são aqueles que causam desconforto, mas **não colocam sua vida em risco imediato**. É o seu caso?',
             ],
           })),
           on: {
-            SERVICO_MEDICO:       { target: 'datas_servico_resultado', actions: assign({ userInput: 'medico' }) },
-            SERVICO_ENFERMAGEM:   { target: 'datas_servico_resultado', actions: assign({ userInput: 'enfermagem' }) },
-            SERVICO_FISIOTERAPIA: { target: 'datas_servico_resultado', actions: assign({ userInput: 'fisioterapia' }) },
-            SERVICO_ODONTOLOGIA:  { target: 'datas_servico_resultado', actions: assign({ userInput: 'odontologia' }) },
-            SERVICO_PSICOLOGIA:   { target: 'datas_servico_resultado', actions: assign({ userInput: 'psicologia' }) },
-            SERVICO_NUTRICAO:     { target: 'datas_servico_resultado', actions: assign({ userInput: 'nutricao' }) },
-            USER_INPUT:           'datas_servico_flow',
+            YES: 'encaminhamento_crianca_gestante',
+            NO:  'encaminhamento_ubs',
           },
         },
-        datas_servico_resultado: {
-          entry: assign(({ context }) => {
-            const servico = context.userInput as string;
-            const datas = DATAS_SERVICOS[servico] || 'Datas não disponíveis no momento.';
-            const nomes: Record<string, string> = {
-              medico: 'Médico', enfermagem: 'Enfermagem', fisioterapia: 'Fisioterapia',
-              odontologia: 'Odontologia', psicologia: 'Psicologia', nutricao: 'Nutrição',
-            };
-            return {
-              responses: [
-                ...context.responses,
-                `📅 Datas de funcionamento — ${nomes[servico] || 'Serviço'}:\n\n${datas}\n\n⚠️ Atenção: as datas são para ir presencialmente agendar o atendimento.`,
-              ],
-            };
-          }),
-          always: { target: 'datas_servico_lembrete' },
-        },
-        datas_servico_lembrete: {
+        encaminhamento_crianca_gestante: {
           entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Gostaria de ser lembrado(a) da data por e-mail ou SMS?'],
+            responses: [...context.responses, 'É uma criança ou gestante?'],
           })),
           on: {
-            YES: 'datas_servico_lembrete_confirmado',
-            NO:  'datas_servico_ubs',
+            YES: 'encaminhamento_hospital',
+            NO:  'encaminhamento_upa',
           },
         },
-        datas_servico_lembrete_confirmado: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, '✅ Certo! Você será lembrado(a) da data do serviço.'],
-          })),
-          always: { target: 'datas_servico_ubs' },
-        },
-        datas_servico_ubs: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Deseja saber qual a UBS ou serviço mais próximo de você?'],
-          })),
-          on: {
-            YES: 'datas_servico_ubs_lista',
-            NO:  'still_need_help',
-          },
-        },
-        datas_servico_ubs_lista: {
+        encaminhamento_hospital: {
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '📍 Algumas UBS de Petrolina:\n\n' + UBS_PETROLINA.join('\n') +
-              '\n\n⚠️ Para encontrar a UBS mais próxima, acesse o aplicativo Meu SUS Digital.',
+              '🏥 Nesse caso, sugiro que você procure atendimento no **Hospital Dom Malan**.\n\nCaso tenha sido um acidente ou trauma, procure o **Hospital de Traumas (HU - UNIVASF)**.',
+            ],
+          })),
+          always: { target: 'still_need_help' },
+        },
+        encaminhamento_upa: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '🏥 Sugiro que você se dirija a uma **Unidade de Pronto Atendimento (UPA)** mais próxima ou a **Unidade Básica de Saúde** mais próxima de você.\n\nCaso tenha sido um acidente ou trauma, sugiro que você vá para o **Hospital de Traumas (HU - UNIVASF)**.',
+            ],
+          })),
+          always: { target: 'still_need_help' },
+        },
+        encaminhamento_ubs: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '🏥 Recomendo que você marque uma consulta na **Unidade Básica de Saúde** mais próxima de você.\n\nBusque a Unidade de Saúde para agendar sua consulta.',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -623,6 +459,347 @@ export const createChatflowMachine = (groqService: GroqService) =>
           },
         },
 
+        vacinacao_flow: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💉 Olá! Eu posso ajudar com informações sobre vacinação. Aqui você pode consultar:\n\n1) Saber quais vacinas devem ser tomadas\n2) Saber em qual UBS a vacina está disponível\n3) Saber quais documentos levar\n4) Consultar horário da sala de vacinação\n5) Vacinas para grupos especiais',
+            ],
+          })),
+          on: {
+            VAC_QUAIS_VACINAS: 'vacinacao_para_quem',
+            VAC_QUAL_UBS:      'vacinacao_ubs_inicio',
+            VAC_DOCUMENTOS:    'vacinacao_documentos',
+            VAC_HORARIO:       'vacinacao_horario_inicio',
+            VAC_GRUPOS:        'vacinacao_grupos_especiais',
+            USER_INPUT:        'vacinacao_flow',
+          },
+        },
+        vacinacao_para_quem: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              'Certo. Para te orientar melhor, a vacina é para:\n\n- Criança\n- Adolescente\n- Adulto\n- Idoso\n- Gestante',
+            ],
+          })),
+          on: {
+            VAC_CRIANCA:     'vacinacao_crianca_idade',
+            VAC_ADOLESCENTE: 'vacinacao_adolescente_idade',
+            VAC_ADULTO:      'vacinacao_adulto_tipo',
+            VAC_IDOSO:       'vacinacao_idoso_tipo',
+            VAC_GESTANTE:    'vacinacao_gestante_fase',
+            USER_INPUT:      'vacinacao_para_quem',
+          },
+        },
+        vacinacao_crianca_idade: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Informe a idade da criança:'],
+          })),
+          on: {
+            USER_INPUT: {
+              target: 'vacinacao_crianca_resultado',
+              actions: assign({ userInput: ({ event }) => event.value }),
+            },
+          },
+        },
+        vacinacao_crianca_resultado: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              `💉 Pelo Calendário Nacional de Vacinação, aos 2 meses a criança normalmente entra na etapa de vacinas como penta, VIP, pneumocócica 10-valente e rotavírus, conforme o histórico vacinal.\n\nPara confirmação exata das doses aplicadas e das pendentes, a caderneta deve ser conferida na UBS na sala de vacinação.\n\nA criança informada tem ${context.userInput} — leve sempre a caderneta de vacinação para conferir as doses pendentes.`,
+            ],
+          })),
+          always: { target: 'vacinacao_ubs_sugestao' },
+        },
+        vacinacao_adolescente_idade: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Informe a idade:'],
+          })),
+          on: {
+            USER_INPUT: {
+              target: 'vacinacao_adolescente_resultado',
+              actions: assign({ userInput: ({ event }) => event.value }),
+            },
+          },
+        },
+        vacinacao_adolescente_resultado: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💉 Para essa faixa etária, o calendário pode incluir vacinas como HPV, meningocócica ACWY e, em certas idades, dengue, além da atualização de hepatite B, dT, febre amarela e tríplice viral conforme o histórico vacinal.\n\nConfira as doses pendentes na caderneta de vacinação na UBS.',
+            ],
+          })),
+          always: { target: 'vacinacao_ubs_sugestao' },
+        },
+        vacinacao_adulto_tipo: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Você quer saber sobre vacinação de rotina ou sobre atualização de doses atrasadas?'],
+          })),
+          on: {
+            VAC_ROTINA:   'vacinacao_adulto_resultado',
+            VAC_ATRASADA: 'vacinacao_adulto_resultado',
+            USER_INPUT:   'vacinacao_adulto_tipo',
+          },
+        },
+        vacinacao_adulto_resultado: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💉 Para adultos, o calendário prevê atualização conforme histórico vacinal, com destaque para hepatite B, dT, febre amarela e tríplice viral.\n\nApós esquema completo de dT, o reforço costuma ser recomendado a cada 10 anos, salvo situações específicas de risco.',
+            ],
+          })),
+          always: { target: 'vacinacao_ubs_sugestao' },
+        },
+        vacinacao_idoso_tipo: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Você quer consultar vacinação de rotina ou campanha ativa?'],
+          })),
+          on: {
+            VAC_ROTINA:   'vacinacao_idoso_rotina',
+            VAC_CAMPANHA: 'vacinacao_idoso_campanha',
+            USER_INPUT:   'vacinacao_idoso_tipo',
+          },
+        },
+        vacinacao_idoso_rotina: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💉 Para idosos, o calendário prevê atualização conforme histórico vacinal, com destaque para hepatite B, dT, febre amarela e tríplice viral. Após esquema completo de dT, o reforço é recomendado a cada 10 anos.',
+            ],
+          })),
+          always: { target: 'vacinacao_ubs_sugestao' },
+        },
+        vacinacao_idoso_campanha: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💉 Certo. Campanhas de vacinação disponíveis para idosos:\n\n1) Vacina da gripe\n2) Vacina da Covid-19\n3) Outras campanhas disponíveis na sua UBS',
+            ],
+          })),
+          on: {
+            VAC_GRIPE:  'vacinacao_idoso_gripe',
+            VAC_COVID:  'vacinacao_idoso_campanha_resultado',
+            VAC_OUTRAS: 'vacinacao_idoso_campanha_resultado',
+            USER_INPUT: 'vacinacao_idoso_campanha',
+          },
+        },
+        vacinacao_idoso_gripe: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💉 A vacina da gripe é uma das principais campanhas voltadas ao público idoso, importante para a prevenção de complicações causadas por vírus respiratórios.\n\nPara te orientar melhor, informe seu bairro, sua UBS de referência ou o nome da unidade de saúde.',
+            ],
+          })),
+          on: {
+            USER_INPUT: {
+              target: 'vacinacao_idoso_gripe_ubs',
+              actions: assign({ userInput: ({ event }) => event.value }),
+            },
+          },
+        },
+        vacinacao_idoso_gripe_ubs: {
+          entry: assign(({ context }) => {
+            const bairro = context.userInput?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
+            const ubs = Object.entries(UBS_POR_BAIRRO).find(([key]) => bairro.includes(key));
+            const ubsInfo = ubs ? ubs[1] : '📍 Não encontrei uma UBS específica para esse bairro.\n' + UBS_PETROLINA.join('\n');
+            return {
+              responses: [
+                ...context.responses,
+                `💉 UBS para vacinação nesse bairro:\n\n${ubsInfo}\n\nDeseja consultar:\n1) Horário da vacinação\n2) Documentos necessários\n3) Outra UBS próxima`,
+              ],
+            };
+          }),
+          on: {
+            VAC_HORARIO_UBS: 'vacinacao_horario_resultado',
+            VAC_DOCS_UBS:    'vacinacao_documentos',
+            VAC_OUTRA_UBS:   'vacinacao_ubs_lista',
+            USER_INPUT:      'vacinacao_idoso_gripe_ubs',
+          },
+        },
+        vacinacao_idoso_campanha_resultado: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💉 Além do local de vacinação, você também deseja saber:\n\n1) O horário de atendimento\n2) Os documentos necessários\n3) Se há outras vacinas de campanha indicadas para idosos',
+            ],
+          })),
+          on: {
+            VAC_HORARIO_UBS: 'vacinacao_horario_resultado',
+            VAC_DOCS_UBS:    'vacinacao_documentos',
+            VAC_OUTRAS_VACS: 'vacinacao_idoso_rotina',
+            USER_INPUT:      'vacinacao_idoso_campanha_resultado',
+          },
+        },
+        vacinacao_gestante_fase: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Em qual fase da gestação você está?'],
+          })),
+          on: {
+            USER_INPUT: {
+              target: 'vacinacao_gestante_resultado',
+              actions: assign({ userInput: ({ event }) => event.value }),
+            },
+          },
+        },
+        vacinacao_gestante_resultado: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💉 Na gestação, a orientação depende do histórico vacinal. O calendário 2026 prevê, entre outras vacinas, hepatite B, dT, influenza por temporada, Covid-19 em cada gestação, dTpa a partir da 20ª semana e vacina contra vírus sincicial respiratório a partir da 28ª semana.\n\nDeseja que eu verifique a UBS de Petrolina mais adequada para atendimento?',
+            ],
+          })),
+          on: {
+            YES: 'vacinacao_ubs_lista',
+            NO:  'vacinacao_retorno',
+          },
+        },
+        vacinacao_ubs_inicio: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              'Certo. Para te orientar melhor, a vacina é para:\n\n1) Uma vacina específica\n2) A UBS mais próxima do seu bairro',
+            ],
+          })),
+          on: {
+            VAC_ESPECIFICA:   'vacinacao_ubs_vacina_especifica',
+            VAC_MAIS_PROXIMA: 'vacinacao_ubs_bairro',
+            USER_INPUT:       'vacinacao_ubs_inicio',
+          },
+        },
+        vacinacao_ubs_vacina_especifica: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Informe o nome da vacina ou o bairro, sua UBS de referência ou o nome da unidade.'],
+          })),
+          on: {
+            USER_INPUT: {
+              target: 'vacinacao_ubs_resultado',
+              actions: assign({ userInput: ({ event }) => event.value }),
+            },
+          },
+        },
+        vacinacao_ubs_bairro: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Por gentileza, informe o seu bairro.'],
+          })),
+          on: {
+            USER_INPUT: {
+              target: 'vacinacao_ubs_resultado',
+              actions: assign({ userInput: ({ event }) => event.value }),
+            },
+          },
+        },
+        vacinacao_ubs_resultado: {
+          entry: assign(({ context }) => {
+            const bairro = context.userInput?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
+            const ubs = Object.entries(UBS_POR_BAIRRO).find(([key]) => bairro.includes(key));
+            const ubsInfo = ubs ? ubs[1] : '📍 Não encontrei uma UBS específica para esse bairro. Veja as unidades disponíveis:\n' + UBS_PETROLINA.join('\n');
+            return {
+              responses: [
+                ...context.responses,
+                `💉 Vou verificar a unidade ou campanha mais próxima para vacinação nesse bairro.\n\n${ubsInfo}\n\nDeseja consultar:\n1) Horário da vacinação\n2) Documentos necessários\n3) Outra UBS próxima`,
+              ],
+            };
+          }),
+          on: {
+            VAC_HORARIO_UBS: 'vacinacao_horario_resultado',
+            VAC_DOCS_UBS:    'vacinacao_documentos',
+            VAC_OUTRA_UBS:   'vacinacao_ubs_lista',
+            USER_INPUT:      'vacinacao_ubs_resultado',
+          },
+        },
+        vacinacao_ubs_sugestao: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Deseja que eu consulte agora a UBS mais próxima em Petrolina para vacinação?'],
+          })),
+          on: {
+            YES: 'vacinacao_ubs_lista',
+            NO:  'vacinacao_retorno',
+          },
+        },
+        vacinacao_ubs_lista: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '📍 UBS de Petrolina com sala de vacinação:\n\n' + UBS_PETROLINA.join('\n') +
+              '\n\nDeseja consultar:\n1) Horário da vacinação\n2) Documentos necessários\n3) Outra UBS próxima',
+            ],
+          })),
+          on: {
+            VAC_HORARIO_UBS: 'vacinacao_horario_resultado',
+            VAC_DOCS_UBS:    'vacinacao_documentos',
+            VAC_OUTRA_UBS:   'vacinacao_ubs_lista',
+            USER_INPUT:      'vacinacao_ubs_lista',
+          },
+        },
+        vacinacao_documentos: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '📋 Para vacinação em Petrolina, as comunicações oficiais orientam levar:\n\n1. Documento de identificação com foto\n2. Cartão SUS ou CPF\n3. Cartão de vacinação, se tiver\n\nDeseja que eu consulte também a UBS mais próxima ou o horário da vacinação?',
+            ],
+          })),
+          on: {
+            YES: 'vacinacao_ubs_lista',
+            NO:  'vacinacao_retorno',
+          },
+        },
+        vacinacao_horario_inicio: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Informe o nome da UBS ou o bairro.'],
+          })),
+          on: {
+            USER_INPUT: {
+              target: 'vacinacao_horario_resultado',
+              actions: assign({ userInput: ({ event }) => event.value }),
+            },
+          },
+        },
+        vacinacao_horario_resultado: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '🕐 De forma geral, das 8h às 12h e das 14h às 17h está disponível.\n\nComo os horários podem ser alterados conforme a campanha ou vacina específica, pode verificar na unidade básica de saúde.',
+            ],
+          })),
+          always: { target: 'vacinacao_retorno' },
+        },
+        vacinacao_grupos_especiais: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💉 Grupos especiais inclui indivíduos imunodeficientes ou portadores de outras condições especiais de morbidade ou exposição a situações de risco.\n\nVocê se enquadra nesse grupo?',
+            ],
+          })),
+          on: {
+            YES: 'vacinacao_grupos_sim',
+            NO:  'vacinacao_retorno',
+          },
+        },
+        vacinacao_grupos_sim: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, '💉 Nesse caso, recomendo que você marque uma consulta na UBS.\n\nGostaria de já deixar marcado sua consulta?'],
+          })),
+          on: {
+            YES: 'schedule_appointment_flow',
+            NO:  'vacinacao_grupos_nao',
+          },
+        },
+        vacinacao_grupos_nao: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, '✅ Ok! Se mudar de ideia, é só me chamar.'],
+          })),
+          always: { target: 'vacinacao_retorno' },
+        },
+        vacinacao_retorno: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Certo, vamos voltar ao menu inicial.\n\nVoltar ao menu inicial de Vacinação?'],
+          })),
+          on: {
+            YES: 'vacinacao_flow',
+            NO:  'menu',
+          },
+        },
+
         farmacia_flow: {
           entry: assign(({ context }) => ({
             responses: [
@@ -677,10 +854,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
         },
         farmacia_retorno: {
           entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              'Deseja saber mais alguma coisa?\n\n1) Voltar ao menu - Farmácia\n2) Voltar ao menu principal\n3) Não - Encerrar',
-            ],
+            responses: [...context.responses, 'Deseja saber mais alguma coisa?\n\n1) Voltar ao menu - Farmácia\n2) Voltar ao menu principal\n3) Não - Encerrar'],
           })),
           on: {
             VOLTAR_FARMACIA: 'farmacia_flow',
@@ -689,379 +863,189 @@ export const createChatflowMachine = (groqService: GroqService) =>
             USER_INPUT:      'farmacia_retorno',
           },
         },
-
-        vacinacao_flow: {
+        schedule_appointment_flow: {
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '💉 Olá! Eu posso ajudar com informações sobre vacinação. Aqui você pode consultar:\n\n1) Saber quais vacinas devem ser tomadas\n2) Saber em qual UBS a vacina está disponível\n3) Saber quais documentos levar\n4) Consultar horário da sala de vacinação\n5) Vacinas para grupos especiais',
+              'Ok! Você deseja:\n\n1) Agendar uma consulta\n2) Ver datas de funcionamento dos serviços\n3) Ver consultas agendadas',
             ],
           })),
           on: {
-            VAC_QUAIS_VACINAS: 'vacinacao_para_quem',
-            VAC_QUAL_UBS:      'vacinacao_ubs_inicio',
-            VAC_DOCUMENTOS:    'vacinacao_documentos',
-            VAC_HORARIO:       'vacinacao_horario_inicio',
-            VAC_GRUPOS:        'vacinacao_grupos_especiais',
-            USER_INPUT:        'vacinacao_flow',
+            SCHEDULE:      'schedule_appointment_menu',
+            DATAS_SERVICO: 'datas_servico_flow',
+            VERIFY:        'query_appointment',
           },
         },
-
-        vacinacao_para_quem: {
+        schedule_appointment_menu: {
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              'Certo. Para te orientar melhor, a vacina é para:\n\n- Criança\n- Adolescente\n- Adulto\n- Idoso\n- Gestante',
-            ],
-          })),
-          on: {
-            VAC_CRIANCA:     'vacinacao_crianca_idade',
-            VAC_ADOLESCENTE: 'vacinacao_adolescente_idade',
-            VAC_ADULTO:      'vacinacao_adulto_tipo',
-            VAC_IDOSO:       'vacinacao_idoso_tipo',
-            VAC_GESTANTE:    'vacinacao_gestante_fase',
-            USER_INPUT:      'vacinacao_para_quem',
-          },
-        },
-
-        vacinacao_crianca_idade: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Informe a idade da criança:'],
-          })),
-          on: {
-            USER_INPUT: {
-              target: 'vacinacao_crianca_resultado',
-              actions: assign({ userInput: ({ event }) => event.value }),
-            },
-          },
-        },
-        vacinacao_crianca_resultado: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              `💉 Pelo Calendário Nacional de Vacinação, aos 2 meses a criança normalmente entra na etapa de vacinas como penta, VIP, pneumocócica 10-valente e rotavírus, conforme o histórico vacinal.\n\nPara confirmação exata das doses aplicadas e das pendentes, a caderneta deve ser conferida na UBS na sala de vacinação.\n\nA criança informada tem ${context.userInput} — leve sempre a caderneta de vacinação para conferir as doses pendentes.`,
-            ],
-          })),
-          always: { target: 'vacinacao_ubs_sugestao' },
-        },
-
-        vacinacao_adolescente_idade: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Informe a idade:'],
-          })),
-          on: {
-            USER_INPUT: {
-              target: 'vacinacao_adolescente_resultado',
-              actions: assign({ userInput: ({ event }) => event.value }),
-            },
-          },
-        },
-        vacinacao_adolescente_resultado: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              `💉 Para essa faixa etária, o calendário pode incluir vacinas como HPV, meningocócica ACWY e, em certas idades, dengue, além da atualização de hepatite B, dT, febre amarela e tríplice viral conforme o histórico vacinal.\n\nConfira as doses pendentes na caderneta de vacinação na UBS.`,
-            ],
-          })),
-          always: { target: 'vacinacao_ubs_sugestao' },
-        },
-
-        vacinacao_adulto_tipo: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              'Você quer saber sobre vacinação de rotina ou sobre atualização de doses atrasadas?',
-            ],
-          })),
-          on: {
-            VAC_ROTINA:   'vacinacao_adulto_resultado',
-            VAC_ATRASADA: 'vacinacao_adulto_resultado',
-            USER_INPUT:   'vacinacao_adulto_tipo',
-          },
-        },
-        vacinacao_adulto_resultado: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '💉 Para adultos, o calendário prevê atualização conforme histórico vacinal, com destaque para hepatite B, dT, febre amarela e tríplice viral.\n\nApós esquema completo de dT, o reforço costuma ser recomendado a cada 10 anos, salvo situações específicas de risco.',
-            ],
-          })),
-          always: { target: 'vacinacao_ubs_sugestao' },
-        },
-
-        vacinacao_idoso_tipo: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              'Você quer consultar vacinação de rotina ou campanha ativa?',
-            ],
-          })),
-          on: {
-            VAC_ROTINA:   'vacinacao_idoso_rotina',
-            VAC_CAMPANHA: 'vacinacao_idoso_campanha',
-            USER_INPUT:   'vacinacao_idoso_tipo',
-          },
-        },
-        vacinacao_idoso_rotina: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '💉 Para idosos, o calendário prevê atualização conforme histórico vacinal, com destaque para hepatite B, dT, febre amarela e tríplice viral. Após esquema completo de dT, o reforço é recomendado a cada 10 anos.',
-            ],
-          })),
-          always: { target: 'vacinacao_ubs_sugestao' },
-        },
-        vacinacao_idoso_campanha: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '💉 Certo. Vou te ajudar com as campanhas de vacinação disponíveis para idosos. No momento, você pode consultar:\n\n1) Vacina da gripe\n2) Vacina da Covid-19\n3) Outras campanhas disponíveis na sua UBS',
-            ],
-          })),
-          on: {
-            VAC_GRIPE:   'vacinacao_idoso_gripe',
-            VAC_COVID:   'vacinacao_idoso_campanha_resultado',
-            VAC_OUTRAS:  'vacinacao_idoso_campanha_resultado',
-            USER_INPUT:  'vacinacao_idoso_campanha',
-          },
-        },
-        vacinacao_idoso_gripe: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '💉 A vacina da gripe é uma das principais campanhas voltadas ao público idoso e é importante para a prevenção de complicações causadas por vírus respiratórios.\n\nPara te orientar melhor, informe seu bairro, sua UBS de referência ou o nome da unidade de saúde.',
+              'Certo!\nO que você deseja?:\n1) Consulta médica\n2) Consulta de enfermagem\n3) Consulta e-multi (psicólogo, nutricionista, fisioterapeuta)\n4) Consulta odontológica\n5) Procedimento',
             ],
           })),
           on: {
             USER_INPUT: {
-              target: 'vacinacao_idoso_gripe_ubs',
+              target: 'appointment_search',
               actions: assign({ userInput: ({ event }) => event.value }),
             },
           },
         },
-        vacinacao_idoso_gripe_ubs: {
+        appointment_search: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Buscando no sistema...'],
+          })),
+          invoke: {
+            src: 'mapAppointment',
+            input: ({ context: { userInput } }) => userInput,
+            onDone: {
+              target: 'list_appointment_options',
+              actions: assign(({ event, context }) => ({
+                responses: [...context.responses, event.output.response],
+                scheduledDateOptions: event.output.scheduleOptions,
+                typeOfAppointment: event.output.typeOfAppointment,
+                userInput: undefined,
+              })),
+            },
+            onError: {
+              target: 'error',
+              actions: assign({ response: 'Erro ao buscar as datas disponíveis. Tente novamente.' }),
+            },
+          },
+        },
+        list_appointment_options: {
+          on: {
+            USER_INPUT: {
+              target: 'date_extraction',
+              actions: assign({ userInput: ({ event }) => event.value }),
+            },
+          },
+        },
+        date_extraction: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Analisando sua resposta...'],
+          })),
+          invoke: {
+            src: 'extractChosenDate',
+            input: ({ context: { userInput, scheduledDateOptions } }) => ({ userInput, availableDates: scheduledDateOptions }),
+            onDone: {
+              target: 'try_schedule_appointment',
+              actions: assign({ chosenDate: ({ event }) => event.output.chosenDate }),
+            },
+            onError: {
+              target: 'list_appointment_options',
+              actions: assign(({ context }) => ({
+                responses: [...context.responses, 'Desculpe, não consegui identificar a data. Por favor, tente digitar a data exata.'],
+              })),
+            },
+          },
+        },
+        try_schedule_appointment: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Verificando disponibilidade da vaga...'],
+          })),
+          invoke: {
+            src: 'scheduleAppointment',
+            input: ({ context: { typeOfAppointment, chosenDate, scheduledDateOptions } }) => ({ typeOfAppointment, chosenDate, scheduledDateOptions }),
+            onDone: {
+              target: 'schedule_lembrete',
+              actions: assign(({ event, context }) => ({
+                responses: [...context.responses, `Agendamento feito!\nSeu agendamento ficou para o dia ${event.output.date} às ${event.output.time}`],
+                userInput: undefined,
+              })),
+            },
+            onError: {
+              target: 'schedule_error_retry',
+              actions: assign(({ context }) => ({
+                responses: [...context.responses, 'Oops!\nOcorreu um erro na reserva.\nVocê gostaria de tentar novamente com outra data?'],
+              })),
+            },
+          },
+        },
+        schedule_error_retry: {
+          on: { YES: 'appointment_search', NO: 'still_need_help' },
+        },
+        schedule_lembrete: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Gostaria de ser lembrado(a) da data por e-mail ou SMS?'],
+          })),
+          on: { YES: 'schedule_lembrete_confirmado', NO: 'schedule_ubs' },
+        },
+        schedule_lembrete_confirmado: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, '✅ Certo! Você será lembrado(a) da data do seu agendamento.'],
+          })),
+          always: { target: 'schedule_ubs' },
+        },
+        schedule_ubs: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Deseja saber qual a UBS ou serviço mais próximo de você?'],
+          })),
+          on: { YES: 'schedule_ubs_lista', NO: 'still_need_help' },
+        },
+        schedule_ubs_lista: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '📍 Algumas UBS de Petrolina:\n\n' + UBS_PETROLINA.join('\n') + '\n\n⚠️ Para encontrar a UBS mais próxima, acesse o aplicativo Meu SUS Digital.',
+            ],
+          })),
+          always: { target: 'still_need_help' },
+        },
+        query_appointment: {},
+        datas_servico_flow: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, '📅 Qual serviço você gostaria de saber as datas de funcionamento?\n\n1) Médico\n2) Enfermagem\n3) Fisioterapia\n4) Odontologia\n5) Psicologia\n6) Nutrição'],
+          })),
+          on: {
+            SERVICO_MEDICO:       { target: 'datas_servico_resultado', actions: assign({ userInput: 'medico' }) },
+            SERVICO_ENFERMAGEM:   { target: 'datas_servico_resultado', actions: assign({ userInput: 'enfermagem' }) },
+            SERVICO_FISIOTERAPIA: { target: 'datas_servico_resultado', actions: assign({ userInput: 'fisioterapia' }) },
+            SERVICO_ODONTOLOGIA:  { target: 'datas_servico_resultado', actions: assign({ userInput: 'odontologia' }) },
+            SERVICO_PSICOLOGIA:   { target: 'datas_servico_resultado', actions: assign({ userInput: 'psicologia' }) },
+            SERVICO_NUTRICAO:     { target: 'datas_servico_resultado', actions: assign({ userInput: 'nutricao' }) },
+            USER_INPUT:           'datas_servico_flow',
+          },
+        },
+        datas_servico_resultado: {
           entry: assign(({ context }) => {
-            const bairro = context.userInput?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
-            const ubs = Object.entries(UBS_POR_BAIRRO).find(([key]) => bairro.includes(key));
-            const ubsInfo = ubs
-              ? ubs[1]
-              : '📍 Não encontrei uma UBS específica para esse bairro.\n' + UBS_PETROLINA.join('\n');
+            const servico = context.userInput as string;
+            const datas = DATAS_SERVICOS[servico] || 'Datas não disponíveis no momento.';
+            const nomes: Record<string, string> = {
+              medico: 'Médico', enfermagem: 'Enfermagem', fisioterapia: 'Fisioterapia',
+              odontologia: 'Odontologia', psicologia: 'Psicologia', nutricao: 'Nutrição',
+            };
             return {
-              responses: [
-                ...context.responses,
-                `💉 UBS para vacinação nesse bairro:\n\n${ubsInfo}\n\nDeseja consultar:\n1) Horário da vacinação\n2) Documentos necessários\n3) Outra UBS próxima`,
-              ],
+              responses: [...context.responses, `📅 Datas de funcionamento — ${nomes[servico] || 'Serviço'}:\n\n${datas}\n\n⚠️ Atenção: as datas são para ir presencialmente agendar o atendimento.`],
             };
           }),
-          on: {
-            VAC_HORARIO_UBS:   'vacinacao_horario_resultado',
-            VAC_DOCS_UBS:      'vacinacao_documentos',
-            VAC_OUTRA_UBS:     'vacinacao_ubs_lista',
-            USER_INPUT:        'vacinacao_idoso_gripe_ubs',
-          },
+          always: { target: 'datas_servico_lembrete' },
         },
-        vacinacao_idoso_campanha_resultado: {
+        datas_servico_lembrete: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Gostaria de ser lembrado(a) da data por e-mail ou SMS?'],
+          })),
+          on: { YES: 'datas_servico_lembrete_confirmado', NO: 'datas_servico_ubs' },
+        },
+        datas_servico_lembrete_confirmado: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, '✅ Certo! Você será lembrado(a) da data do serviço.'],
+          })),
+          always: { target: 'datas_servico_ubs' },
+        },
+        datas_servico_ubs: {
+          entry: assign(({ context }) => ({
+            responses: [...context.responses, 'Deseja saber qual a UBS ou serviço mais próximo de você?'],
+          })),
+          on: { YES: 'datas_servico_ubs_lista', NO: 'still_need_help' },
+        },
+        datas_servico_ubs_lista: {
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '💉 Além do local de vacinação, você também deseja saber:\n\n1) O horário de atendimento\n2) Os documentos necessários\n3) Se há outras vacinas de campanha indicadas para idosos',
+              '📍 Algumas UBS de Petrolina:\n\n' + UBS_PETROLINA.join('\n') + '\n\n⚠️ Para encontrar a UBS mais próxima, acesse o aplicativo Meu SUS Digital.',
             ],
           })),
-          on: {
-            VAC_HORARIO_UBS: 'vacinacao_horario_resultado',
-            VAC_DOCS_UBS:    'vacinacao_documentos',
-            VAC_OUTRAS_VACS: 'vacinacao_idoso_rotina',
-            USER_INPUT:      'vacinacao_idoso_campanha_resultado',
-          },
-        },
-
-        vacinacao_gestante_fase: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Em qual fase da gestação você está?'],
-          })),
-          on: {
-            USER_INPUT: {
-              target: 'vacinacao_gestante_resultado',
-              actions: assign({ userInput: ({ event }) => event.value }),
-            },
-          },
-        },
-        vacinacao_gestante_resultado: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '💉 Na gestação, a orientação depende do histórico vacinal. O calendário 2026 prevê, entre outras vacinas, hepatite B, dT, influenza por temporada, Covid-19 em cada gestação, dTpa a partir da 20ª semana e vacina contra vírus sincicial respiratório a partir da 28ª semana, em cada gestação.\n\nDeseja que eu verifique a UBS de Petrolina mais adequada para atendimento?',
-            ],
-          })),
-          on: {
-            YES: 'vacinacao_ubs_lista',
-            NO:  'vacinacao_retorno',
-          },
-        },
-
-        vacinacao_ubs_inicio: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              'Certo. Para te orientar melhor, a vacina é para:\n\n- Uma vacina específica\n- A UBS mais próxima do seu bairro',
-            ],
-          })),
-          on: {
-            VAC_ESPECIFICA: 'vacinacao_ubs_vacina_especifica',
-            VAC_MAIS_PROXIMA: 'vacinacao_ubs_bairro',
-            USER_INPUT:     'vacinacao_ubs_inicio',
-          },
-        },
-        vacinacao_ubs_vacina_especifica: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Informe o nome da vacina ou o bairro, sua UBS de referência ou o nome da unidade.'],
-          })),
-          on: {
-            USER_INPUT: {
-              target: 'vacinacao_ubs_resultado',
-              actions: assign({ userInput: ({ event }) => event.value }),
-            },
-          },
-        },
-        vacinacao_ubs_bairro: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Por gentileza, informe o seu bairro.'],
-          })),
-          on: {
-            USER_INPUT: {
-              target: 'vacinacao_ubs_resultado',
-              actions: assign({ userInput: ({ event }) => event.value }),
-            },
-          },
-        },
-        vacinacao_ubs_resultado: {
-          entry: assign(({ context }) => {
-            const bairro = context.userInput?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
-            const ubs = Object.entries(UBS_POR_BAIRRO).find(([key]) => bairro.includes(key));
-            const ubsInfo = ubs
-              ? ubs[1]
-              : '📍 Não encontrei uma UBS específica para esse bairro. Veja as unidades disponíveis:\n' + UBS_PETROLINA.join('\n');
-            return {
-              responses: [
-                ...context.responses,
-                `💉 Vou verificar a unidade ou campanha mais próxima para vacinação nesse bairro.\n\n${ubsInfo}\n\nDeseja consultar:\n1) Horário da vacinação\n2) Documentos necessários\n3) Outra UBS próxima`,
-              ],
-            };
-          }),
-          on: {
-            VAC_HORARIO_UBS: 'vacinacao_horario_resultado',
-            VAC_DOCS_UBS:    'vacinacao_documentos',
-            VAC_OUTRA_UBS:   'vacinacao_ubs_lista',
-            USER_INPUT:      'vacinacao_ubs_resultado',
-          },
-        },
-        vacinacao_ubs_sugestao: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              'Deseja que eu consulte agora a UBS mais próxima em Petrolina para vacinação?',
-            ],
-          })),
-          on: {
-            YES: 'vacinacao_ubs_lista',
-            NO:  'vacinacao_retorno',
-          },
-        },
-        vacinacao_ubs_lista: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '📍 UBS de Petrolina com sala de vacinação:\n\n' + UBS_PETROLINA.join('\n') +
-              '\n\nDeseja consultar:\n1) Horário da vacinação\n2) Documentos necessários\n3) Outra UBS próxima',
-            ],
-          })),
-          on: {
-            VAC_HORARIO_UBS: 'vacinacao_horario_resultado',
-            VAC_DOCS_UBS:    'vacinacao_documentos',
-            VAC_OUTRA_UBS:   'vacinacao_ubs_lista',
-            USER_INPUT:      'vacinacao_ubs_lista',
-          },
-        },
-
-        vacinacao_documentos: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '📋 Para vacinação em Petrolina, as comunicações oficiais orientam levar:\n\n1. Documento de identificação com foto\n2. Cartão SUS ou CPF\n3. Cartão de vacinação, se tiver\n\nDeseja que eu consulte também a UBS mais próxima ou o horário da vacinação?',
-            ],
-          })),
-          on: {
-            YES: 'vacinacao_ubs_lista',
-            NO:  'vacinacao_retorno',
-          },
-        },
-
-        vacinacao_horario_inicio: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Informe o nome da UBS ou o bairro.'],
-          })),
-          on: {
-            USER_INPUT: {
-              target: 'vacinacao_horario_resultado',
-              actions: assign({ userInput: ({ event }) => event.value }),
-            },
-          },
-        },
-        vacinacao_horario_resultado: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '🕐 De forma geral, das 8h às 12h e das 14h às 17h está disponível.\n\nComo os horários podem ser alterados conforme a campanha ou vacina específica, pode verificar na unidade básica de saúde.',
-            ],
-          })),
-          always: { target: 'vacinacao_retorno' },
-        },
-
-        vacinacao_grupos_especiais: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '💉 Grupos especiais inclui indivíduos imunodeficientes ou portadores de outras condições especiais de morbidade ou exposição a situações de risco.\n\nVocê se enquadra nesse grupo?',
-            ],
-          })),
-          on: {
-            YES: 'vacinacao_grupos_sim',
-            NO:  'vacinacao_retorno',
-          },
-        },
-        vacinacao_grupos_sim: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '💉 Nesse caso, recomendo que você marque uma consulta na UBS.\n\nGostaria de já deixar marcado sua consulta?',
-            ],
-          })),
-          on: {
-            YES: 'schedule_appointment_flow',
-            NO:  'vacinacao_grupos_nao',
-          },
-        },
-        vacinacao_grupos_nao: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              '✅ Ok! Se mudar de ideia, é só me chamar.',
-            ],
-          })),
-          always: { target: 'vacinacao_retorno' },
-        },
-
-        vacinacao_retorno: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              'Certo, vamos voltar ao menu inicial.\n\nVoltar ao menu inicial de Vacinação?',
-            ],
-          })),
-          on: {
-            YES: 'vacinacao_flow',
-            NO:  'menu',
-          },
+          always: { target: 'still_need_help' },
         },
 
         still_need_help: {
@@ -1069,10 +1053,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [...context.responses, 'Há mais algo em que eu possa ajudar?'],
             response: 'Há mais algo em que eu possa ajudar?',
           })),
-          on: {
-            YES: 'menu',
-            NO:  'end_session',
-          },
+          on: { YES: 'menu', NO: 'end_session' },
         },
         error: {
           after: { 500: { target: 'menu' } },
@@ -1115,10 +1096,10 @@ export const createChatflowMachine = (groqService: GroqService) =>
               { data: data2.toLocaleDateString(), hora: fmt(hour) },
               { data: data3.toLocaleDateString(), hora: fmt(hour) },
             ];
-            const response = 'Certo!\n\nPara essa modalidade temos:\n\n' +
-              scheduleOptions.map((o) => `- ${o.data} às ${o.hora}`).join('\n') +
-              '\nQual a sua disponibilidade?';
-            return { scheduleOptions, typeOfAppointment, response };
+            return {
+              scheduleOptions, typeOfAppointment,
+              response: 'Certo!\n\nPara essa modalidade temos:\n\n' + scheduleOptions.map((o) => `- ${o.data} às ${o.hora}`).join('\n') + '\nQual a sua disponibilidade?',
+            };
           } catch (err) {}
         }),
         extractChosenDate: fromPromise(async ({ input }: { input: any }) => {
@@ -1127,8 +1108,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             const prompt: ChatMessage[] = [
               {
                 role: 'system',
-                content: `Você é um extrator de datas. O usuário escolheu uma data e hora dentre as opções disponíveis: ${availableDatesList}.
-                Retorne APENAS um objeto JSON no formato: {"chosen_date": "DD/MM/AAAA", "chosen_time": "HH:MM"} ou {"chosen_date": "null"}.`,
+                content: `Você é um extrator de datas. Opções disponíveis: ${availableDatesList}. Retorne APENAS JSON: {"chosen_date": "DD/MM/AAAA", "chosen_time": "HH:MM"} ou {"chosen_date": "null"}.`,
               },
               { role: 'user', content: input.userInput },
             ];
@@ -1147,9 +1127,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             );
             if (!selectedAppointment) throw new Error('Data ou horário não disponível');
             return { sucess: true, date: selectedAppointment.data, time: selectedAppointment.hora };
-          } catch (err) {
-            throw err;
-          }
+          } catch (err) { throw err; }
         }),
       },
     },

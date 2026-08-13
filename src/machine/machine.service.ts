@@ -24,27 +24,20 @@ export class MachineService {
     this.pending[sessionId] = (async () => {
       const machine = createChatflowMachine(this.groqService);
       const actor = createActor(machine).start();
-
       const DEFAULT_CPF = process.env.DEFAULT_USER_CPF || '12345678901';
       const user = await this.userService.findByCpf(DEFAULT_CPF);
-
       if (user) {
         actor.send({
           type: 'LOAD_USER',
           value: {
-            name: user.name,
-            cpf: user.cpf,
-            birthDate: user.birthDate,
-            socialName: user.socialName || '',
-            hasSocialName: user.hasSocialName,
-            sex: user.sex || '',
-            hasHealthProfessionalName: user.hasHealthProfessionalName,
+            name: user.name, cpf: user.cpf, birthDate: user.birthDate,
+            socialName: user.socialName || '', hasSocialName: user.hasSocialName,
+            sex: user.sex || '', hasHealthProfessionalName: user.hasHealthProfessionalName,
             healthProfessionalName: user.healthProfessionalName || '',
           },
         });
         this.logger.log(`User loaded from DB: ${user.name}`);
       }
-
       this.actors[sessionId] = actor;
       delete this.pending[sessionId];
       this.logger.log(`New machine created - session id: ${sessionId}`);
@@ -57,18 +50,14 @@ export class MachineService {
   public async interpretMessage(sessionId: string, message: string): Promise<string[]> {
     this.logger.log('Starting machine message interpretation');
     const actor = await this.getOrCreateActor(sessionId);
-
     const snapshot = actor.getSnapshot();
     const lastStateValue = snapshot.value;
     const eventType = this.mapInputToEvent(message, lastStateValue as string);
-
     actor.send({ type: eventType as string, value: message });
     await this.sleep(1200);
-
     const updatedSnapshot = actor.getSnapshot();
     const responses = updatedSnapshot.context.responses || [];
     actor.send({ type: 'CLEAR_RESPONSES' });
-
     this.logger.log('Sending responses to the chatbot');
     return responses;
   }
@@ -83,23 +72,30 @@ export class MachineService {
     const normalized = this.normalize(input);
 
     if (lastState === 'menu') {
-      if (trimmed === '1' || normalized.includes('agendar') || normalized.includes('consulta'))
-        return 'SCHEDULE_APPOINTMENT';
-      if (trimmed === '2' || normalized.includes('orientacao') || normalized.includes('rapida'))
+      if (trimmed === '1' || normalized.includes('orientacao') || normalized.includes('rapida'))
         return 'QUICK_GUIDANCE';
-      if (trimmed === '3' || normalized.includes('farmacia'))
-        return 'FARMACIA';
-      if (trimmed === '4' || normalized.includes('vacinacao') || normalized.includes('vacina'))
+      if (trimmed === '2' || normalized.includes('encaminhamento') || normalized.includes('onde procurar') || normalized.includes('atendimento'))
+        return 'ENCAMINHAMENTO';
+      if (trimmed === '3' || normalized.includes('vacinacao') || normalized.includes('vacina'))
         return 'VACINACAO';
+      if (trimmed === '4' || normalized.includes('farmacia'))
+        return 'FARMACIA';
+      if (trimmed === '5' || normalized.includes('agendar') || normalized.includes('consulta'))
+        return 'SCHEDULE_APPOINTMENT';
+    }
+
+    if (lastState === 'encaminhamento_flow' || lastState === 'encaminhamento_leve_moderado' ||
+        lastState === 'encaminhamento_crianca_gestante') {
+      if (['sim', 's', 'yes', 'y', 'claro', 'quero', 'afirmativo'].includes(normalized) || normalized.startsWith('sim'))
+        return 'YES';
+      if (['nao', 'n', 'no', 'negativo'].includes(normalized) || normalized.startsWith('nao'))
+        return 'NO';
     }
 
     if (lastState === 'schedule_appointment_flow') {
-      if (trimmed === '1' || normalized.includes('agendar'))
-        return 'SCHEDULE';
-      if (trimmed === '2' || normalized.includes('datas') || normalized.includes('funcionamento'))
-        return 'DATAS_SERVICO';
-      if (trimmed === '3' || normalized.includes('verificar') || normalized.includes('ver'))
-        return 'VERIFY';
+      if (trimmed === '1' || normalized.includes('agendar')) return 'SCHEDULE';
+      if (trimmed === '2' || normalized.includes('datas') || normalized.includes('funcionamento')) return 'DATAS_SERVICO';
+      if (trimmed === '3' || normalized.includes('verificar') || normalized.includes('ver')) return 'VERIFY';
     }
 
     if (lastState === 'datas_servico_flow') {
@@ -111,7 +107,6 @@ export class MachineService {
       if (trimmed === '6' || normalized.includes('nutricao')) return 'SERVICO_NUTRICAO';
     }
 
-    // ── Orientações ──
     if (lastState === 'quick_guidance_flow') {
       if (trimmed === '1' || normalized.includes('nutricao')) return 'NUTRICAO';
       if (trimmed === '2' || normalized.includes('fisioterapia')) return 'FISIOTERAPIA';
@@ -164,7 +159,6 @@ export class MachineService {
       if (trimmed === '3' || normalized.includes('encerrar')) return 'ENCERRAR';
     }
 
-    // ── Farmácia ──
     if (lastState === 'farmacia_flow') {
       if (trimmed === '1' || normalized.includes('horario') || normalized.includes('funcionamento')) return 'FARMACIA_HORARIO';
       if (trimmed === '2' || normalized.includes('endereco') || normalized.includes('localizacao')) return 'FARMACIA_ENDERECO';
@@ -178,9 +172,8 @@ export class MachineService {
       if (trimmed === '3' || normalized.includes('encerrar')) return 'ENCERRAR';
     }
 
-    // ── Vacinação ──
     if (lastState === 'vacinacao_flow') {
-      if (trimmed === '1' || normalized.includes('quais vacinas') || normalized.includes('vacinas') || normalized.includes('tomar')) return 'VAC_QUAIS_VACINAS';
+      if (trimmed === '1' || normalized.includes('quais vacinas') || normalized.includes('tomar')) return 'VAC_QUAIS_VACINAS';
       if (trimmed === '2' || normalized.includes('ubs') || normalized.includes('disponivel')) return 'VAC_QUAL_UBS';
       if (trimmed === '3' || normalized.includes('documento')) return 'VAC_DOCUMENTOS';
       if (trimmed === '4' || normalized.includes('horario') || normalized.includes('sala')) return 'VAC_HORARIO';
@@ -188,10 +181,10 @@ export class MachineService {
     }
 
     if (lastState === 'vacinacao_para_quem') {
-      if (normalized.includes('crianca') || normalized.includes('bebe') || trimmed === 'criança') return 'VAC_CRIANCA';
-      if (normalized.includes('adolescente') || trimmed === 'adolescente') return 'VAC_ADOLESCENTE';
-      if (normalized.includes('adulto') || trimmed === 'adulto') return 'VAC_ADULTO';
-      if (normalized.includes('idoso') || normalized.includes('idosa') || trimmed === 'idoso') return 'VAC_IDOSO';
+      if (normalized.includes('crianca') || normalized.includes('bebe')) return 'VAC_CRIANCA';
+      if (normalized.includes('adolescente')) return 'VAC_ADOLESCENTE';
+      if (normalized.includes('adulto')) return 'VAC_ADULTO';
+      if (normalized.includes('idoso') || normalized.includes('idosa')) return 'VAC_IDOSO';
       if (normalized.includes('gestante') || normalized.includes('gravida') || normalized.includes('gravidez')) return 'VAC_GESTANTE';
     }
 
@@ -211,46 +204,16 @@ export class MachineService {
       if (trimmed === '3' || normalized.includes('outras') || normalized.includes('outra')) return 'VAC_OUTRAS';
     }
 
-    if (lastState === 'vacinacao_idoso_gripe_ubs' || lastState === 'vacinacao_ubs_resultado' || lastState === 'vacinacao_ubs_lista' || lastState === 'vacinacao_idoso_campanha_resultado') {
+    if (['vacinacao_idoso_gripe_ubs', 'vacinacao_ubs_resultado', 'vacinacao_ubs_lista', 'vacinacao_idoso_campanha_resultado'].includes(lastState)) {
       if (trimmed === '1' || normalized.includes('horario')) return 'VAC_HORARIO_UBS';
       if (trimmed === '2' || normalized.includes('documento')) return 'VAC_DOCS_UBS';
-      if (trimmed === '3' || normalized.includes('outra ubs') || normalized.includes('outra unidade')) return 'VAC_OUTRA_UBS';
+      if (trimmed === '3' || normalized.includes('outra')) return 'VAC_OUTRA_UBS';
       if (normalized.includes('outras vacinas') || normalized.includes('outras campanhas')) return 'VAC_OUTRAS_VACS';
     }
 
     if (lastState === 'vacinacao_ubs_inicio') {
       if (trimmed === '1' || normalized.includes('especifica') || normalized.includes('especifico')) return 'VAC_ESPECIFICA';
       if (trimmed === '2' || normalized.includes('proxima') || normalized.includes('bairro')) return 'VAC_MAIS_PROXIMA';
-    }
-
-    if (lastState === 'vacinacao_retorno') {
-      if (normalized.includes('sim') || trimmed === 's') return 'YES';
-      if (normalized.includes('nao') || trimmed === 'n') return 'NO';
-    }
-
-    if (lastState === 'vacinacao_grupos_especiais') {
-      if (normalized.includes('sim') || trimmed === 's') return 'YES';
-      if (normalized.includes('nao') || trimmed === 'n') return 'NO';
-    }
-
-    if (lastState === 'vacinacao_grupos_sim') {
-      if (normalized.includes('sim') || trimmed === 's') return 'YES';
-      if (normalized.includes('nao') || trimmed === 'n') return 'NO';
-    }
-
-    if (lastState === 'vacinacao_gestante_resultado') {
-      if (normalized.includes('sim') || trimmed === 's') return 'YES';
-      if (normalized.includes('nao') || trimmed === 'n') return 'NO';
-    }
-
-    if (lastState === 'vacinacao_ubs_sugestao') {
-      if (normalized.includes('sim') || trimmed === 's') return 'YES';
-      if (normalized.includes('nao') || trimmed === 'n') return 'NO';
-    }
-
-    if (lastState === 'vacinacao_documentos') {
-      if (normalized.includes('sim') || trimmed === 's') return 'YES';
-      if (normalized.includes('nao') || trimmed === 'n') return 'NO';
     }
 
     const YES_VARIANTS = ['sim', 's', 'si', 'yes', 'y', 'claro', 'quero', 'afirmativo', 'com certeza', 'pode ser'];
