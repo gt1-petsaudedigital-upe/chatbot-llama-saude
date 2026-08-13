@@ -83,12 +83,12 @@ export class MachineService {
     const normalized = this.normalize(input);
 
     if (lastState === 'menu') {
-      if (trimmed === '1' || normalized.includes('problema') || normalized.includes('saude'))
-        return 'HEALTH_ISSUE_INFORM';
-      if (trimmed === '2' || normalized.includes('agendar') || normalized.includes('consulta'))
+      if (trimmed === '1' || normalized.includes('agendar') || normalized.includes('consulta'))
         return 'SCHEDULE_APPOINTMENT';
-      if (trimmed === '3' || normalized.includes('orientacao') || normalized.includes('rapida'))
+      if (trimmed === '2' || normalized.includes('orientacao') || normalized.includes('rapida'))
         return 'QUICK_GUIDANCE';
+      if (trimmed === '3' || normalized.includes('farmacia'))
+        return 'FARMACIA';
     }
 
     if (lastState === 'schedule_appointment_flow') {
@@ -107,7 +107,7 @@ export class MachineService {
         return 'SERVICO_ENFERMAGEM';
       if (trimmed === '3' || normalized.includes('fisioterapia') || normalized.includes('fisio'))
         return 'SERVICO_FISIOTERAPIA';
-      if (trimmed === '4' || normalized.includes('odontologia') || normalized.includes('dente') || normalized.includes('dentista'))
+      if (trimmed === '4' || normalized.includes('odontologia') || normalized.includes('dente'))
         return 'SERVICO_ODONTOLOGIA';
       if (trimmed === '5' || normalized.includes('psicologia') || normalized.includes('psico'))
         return 'SERVICO_PSICOLOGIA';
@@ -131,12 +131,13 @@ export class MachineService {
     }
 
     if (lastState === 'quick_guidance_nutricao') {
-      if (trimmed === '1' || normalized.includes('alimentacao') || normalized.includes('aliment') || normalized.includes('comida'))
+      if (trimmed === '1' || normalized.includes('alimentacao') || normalized.includes('comida'))
         return 'ALIMENTACAO_BASICA';
-      if (trimmed === '2' || normalized.includes('hidratacao') || normalized.includes('agua') || normalized.includes('beber'))
+      if (trimmed === '2' || normalized.includes('hidratacao') || normalized.includes('agua'))
         return 'HIDRATACAO';
     }
 
+  
     if (lastState === 'quick_guidance_fisioterapia') {
       if (trimmed === '1' || normalized.includes('postura') || normalized.includes('coluna'))
         return 'POSTURA';
@@ -158,7 +159,7 @@ export class MachineService {
         return 'ANSIEDADE_STRESS';
       if (trimmed === '2' || normalized.includes('rede') || normalized.includes('apoio') || normalized.includes('cvv'))
         return 'REDE_APOIO';
-      if (trimmed === '3' || normalized.includes('sono') || normalized.includes('dormir') || normalized.includes('insonia'))
+      if (trimmed === '3' || normalized.includes('sono') || normalized.includes('dormir'))
         return 'HIGIENE_SONO';
     }
 
@@ -174,7 +175,7 @@ export class MachineService {
     }
 
     if (lastState === 'quick_guidance_doacao_sangue') {
-      if (trimmed === '1' || normalized.includes('quem') || normalized.includes('pode doar'))
+      if (trimmed === '1' || normalized.includes('quem'))
         return 'QUEM_PODE_DOAR';
       if (trimmed === '2' || normalized.includes('onde'))
         return 'ONDE_DOAR';
@@ -182,7 +183,7 @@ export class MachineService {
         return 'COMO_FUNCIONA';
       if (trimmed === '4' || normalized.includes('cuidado') || normalized.includes('antes'))
         return 'CUIDADOS_ANTES';
-      if (trimmed === '5' || normalized.includes('impedimento') || normalized.includes('temporario'))
+      if (trimmed === '5' || normalized.includes('impedimento'))
         return 'IMPEDIMENTOS';
     }
 
@@ -194,6 +195,27 @@ export class MachineService {
       if (trimmed === '3' || normalized.includes('encerrar'))
         return 'ENCERRAR';
     }
+
+    if (lastState === 'farmacia_flow') {
+      if (trimmed === '1' || normalized.includes('horario') || normalized.includes('funcionamento'))
+        return 'FARMACIA_HORARIO';
+      if (trimmed === '2' || normalized.includes('endereco') || normalized.includes('localizacao'))
+        return 'FARMACIA_ENDERECO';
+      if (trimmed === '3' || normalized.includes('medicamento') || normalized.includes('remedio'))
+        return 'FARMACIA_MEDICAMENTOS';
+      if (trimmed === '4' || normalized.includes('orientacao'))
+        return 'FARMACIA_ORIENTACOES';
+    }
+
+    if (lastState === 'farmacia_retorno') {
+      if (trimmed === '1' || normalized.includes('farmacia'))
+        return 'VOLTAR_FARMACIA';
+      if (trimmed === '2' || normalized.includes('principal') || normalized.includes('menu'))
+        return 'VOLTAR_MENU';
+      if (trimmed === '3' || normalized.includes('encerrar') || normalized.includes('nao'))
+        return 'ENCERRAR';
+    }
+
 
     const YES_VARIANTS = ['sim', 's', 'si', 'yes', 'y', 'claro', 'quero', 'afirmativo', 'com certeza', 'pode ser'];
     const NO_VARIANTS  = ['nao', 'n', 'no', 'negativo', 'nao quero'];

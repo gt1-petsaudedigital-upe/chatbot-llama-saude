@@ -5,7 +5,6 @@ import { Logger } from '@nestjs/common';
 
 const logger = new Logger(StateMachine.name);
 
-// ── Datas fictícias por serviço ──
 const DATAS_SERVICOS: Record<string, string> = {
   medico:       'Segunda e Quarta: 07h30 às 11h30 | Sexta: 07h30 às 10h30',
   enfermagem:   'Segunda a Sexta: 07h00 às 12h00',
@@ -97,75 +96,14 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               'Bem-vindo ao menu de serviços!',
-              'Você gostaria de: \n 1) Informar um problema de saúde \n 2) Agendar ou confirmar uma consulta ou procedimento \n 3) Orientações rápidas',
+              'Você gostaria de:\n1) Agendar ou confirmar uma consulta ou procedimento\n2) Orientações rápidas\n3) Farmácia',
             ],
           })),
           on: {
-            HEALTH_ISSUE_INFORM:  'health_issue_inform_flow',
             SCHEDULE_APPOINTMENT: 'schedule_appointment_flow',
             QUICK_GUIDANCE:       'quick_guidance_flow',
+            FARMACIA:             'farmacia_flow',
           },
-        },
-
-        health_issue_inform_flow: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              `Entendi!\nPara te ajudar melhor, preciso saber:\nQual o seu principal sintoma?\n(Febre, dor, tosse, falta de ar, outro...)`,
-            ],
-          })),
-          on: {
-            USER_INPUT: {
-              target: 'health_issue_analysis',
-              actions: assign({ userInput: ({ event }) => event.value }),
-            },
-          },
-        },
-        health_issue_analysis: {
-          entry: assign(({ context }) => ({
-            responses: [...context.responses, 'Analisando sintomas...'],
-          })),
-          invoke: {
-            src: 'askLlamaForSymptomSeverity',
-            input: ({ context: { userInput } }) => userInput,
-            onDone: [
-              {
-                target: 'health_issue_mild_symptoms',
-                guard: ({ event }) => event.output === 'health_issue_mild_symptoms',
-                actions: assign({ userInput: undefined }),
-              },
-              {
-                target: 'health_issue_severe_symptoms',
-                guard: ({ event }) => event.output === 'health_issue_severe_symptoms',
-                actions: assign({ userInput: undefined }),
-              },
-            ],
-            onError: {
-              target: 'error',
-              actions: assign(({ context }) => ({
-                responses: [...context.responses, 'Erro ao analisar sintomas. Tente novamente.'],
-                userInput: undefined,
-              })),
-            },
-          },
-        },
-        health_issue_mild_symptoms: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              `Com base no que você me relatou, você pode tomar algumas precauções ainda em casa: \nLembre-se de repousar e se hidrate. \nSe os sintomas persistirem ou piorarem, busque a UBS mais próxima de você!`,
-            ],
-          })),
-          after: { 600: { target: 'still_need_help' } },
-        },
-        health_issue_severe_symptoms: {
-          entry: assign(({ context }) => ({
-            responses: [
-              ...context.responses,
-              `Seus sintomas indicam alerta! \nProcure o hospital mais perto de você para ser atendido prontamente!`,
-            ],
-          })),
-          after: { 600: { target: 'still_need_help' } },
         },
 
         schedule_appointment_flow: {
@@ -176,9 +114,9 @@ export const createChatflowMachine = (groqService: GroqService) =>
             ],
           })),
           on: {
-            SCHEDULE:        'schedule_appointment_menu',
-            DATAS_SERVICO:   'datas_servico_flow',
-            VERIFY:          'query_appointment',
+            SCHEDULE:      'schedule_appointment_menu',
+            DATAS_SERVICO: 'datas_servico_flow',
+            VERIFY:        'query_appointment',
           },
         },
 
@@ -186,7 +124,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              `Certo! \nO que você deseja?:\n 1) Consulta médica\n 2) Consulta de enfermagem\n 3) Consulta e-multi (psicológo, nutricionista, fisioterapeuta) \n 4) Consulta odontológica \n 5) Procedimento (ex: preventivo, DIU, administração de medicamento, realização de curativo, retirada de ponto, pequena cirurgia)`,
+              'Certo!\nO que você deseja?:\n1) Consulta médica\n2) Consulta de enfermagem\n3) Consulta e-multi (psicólogo, nutricionista, fisioterapeuta)\n4) Consulta odontológica\n5) Procedimento (ex: preventivo, DIU, administração de medicamento, realização de curativo, retirada de ponto, pequena cirurgia)',
             ],
           })),
           on: {
@@ -277,7 +215,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               actions: assign(({ context }) => ({
                 responses: [
                   ...context.responses,
-                  'Oops! \nAo tentarmos agendar, ocorreu um erro na reserva. \nVocê gostaria de tentar novamente com outra data?',
+                  'Oops!\nAo tentarmos agendar, ocorreu um erro na reserva.\nVocê gostaria de tentar novamente com outra data?',
                 ],
               })),
             },
@@ -336,40 +274,40 @@ export const createChatflowMachine = (groqService: GroqService) =>
         query_appointment: {},
 
         datas_servico_flow: {
-  entry: assign(({ context }) => ({
-    responses: [
-      ...context.responses,
-      '📅 Qual serviço você gostaria de saber as datas de funcionamento?\n\n1) Médico\n2) Enfermagem\n3) Fisioterapia\n4) Odontologia\n5) Psicologia\n6) Nutrição',
-    ],
-  })),
-  on: {
-    SERVICO_MEDICO: {
-      target: 'datas_servico_resultado',
-      actions: assign({ userInput: 'medico' }),
-    },
-    SERVICO_ENFERMAGEM: {
-      target: 'datas_servico_resultado',
-      actions: assign({ userInput: 'enfermagem' }),
-    },
-    SERVICO_FISIOTERAPIA: {
-      target: 'datas_servico_resultado',
-      actions: assign({ userInput: 'fisioterapia' }),
-    },
-    SERVICO_ODONTOLOGIA: {
-      target: 'datas_servico_resultado',
-      actions: assign({ userInput: 'odontologia' }),
-    },
-    SERVICO_PSICOLOGIA: {
-      target: 'datas_servico_resultado',
-      actions: assign({ userInput: 'psicologia' }),
-    },
-    SERVICO_NUTRICAO: {
-      target: 'datas_servico_resultado',
-      actions: assign({ userInput: 'nutricao' }),
-    },
-    USER_INPUT: 'datas_servico_flow',
-  },
-},
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '📅 Qual serviço você gostaria de saber as datas de funcionamento?\n\n1) Médico\n2) Enfermagem\n3) Fisioterapia\n4) Odontologia\n5) Psicologia\n6) Nutrição',
+            ],
+          })),
+          on: {
+            SERVICO_MEDICO: {
+              target: 'datas_servico_resultado',
+              actions: assign({ userInput: 'medico' }),
+            },
+            SERVICO_ENFERMAGEM: {
+              target: 'datas_servico_resultado',
+              actions: assign({ userInput: 'enfermagem' }),
+            },
+            SERVICO_FISIOTERAPIA: {
+              target: 'datas_servico_resultado',
+              actions: assign({ userInput: 'fisioterapia' }),
+            },
+            SERVICO_ODONTOLOGIA: {
+              target: 'datas_servico_resultado',
+              actions: assign({ userInput: 'odontologia' }),
+            },
+            SERVICO_PSICOLOGIA: {
+              target: 'datas_servico_resultado',
+              actions: assign({ userInput: 'psicologia' }),
+            },
+            SERVICO_NUTRICAO: {
+              target: 'datas_servico_resultado',
+              actions: assign({ userInput: 'nutricao' }),
+            },
+            USER_INPUT: 'datas_servico_flow',
+          },
+        },
         datas_servico_resultado: {
           entry: assign(({ context }) => {
             const servico = context.userInput as string;
@@ -484,8 +422,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
               ...context.responses,
               '💧 A quantidade de água varia de pessoa para pessoa.\n\n' +
               'Segundo o Ministério da Saúde do Brasil, em geral, o consumo pode ficar entre 2 e 3 litros por dia, dependendo da idade, do peso, da atividade física e do clima.\n\n' +
-              '📌 Uma forma prática de estimar é usar cerca de 30 a 35 ml de água por quilo de peso corporal.\n' +
-              'Exemplo: Se você pesa 70kg, a conta é 70 x 35 = 2.450ml (ou seja, quase 2,5 litros por dia).\n\n' +
+              '📌 Uma forma prática de estimar é usar cerca de 30 a 35 ml de água por quilo de peso corporal.\nExemplo: Se você pesa 70kg, a conta é 70 x 35 = 2.450ml (ou seja, quase 2,5 litros por dia).\n\n' +
               '💡 Lembre-se: essa é uma estimativa. Suas necessidades podem variar!\n\n' +
               '🍉 A água não é a única forma de se hidratar — alimentos como frutas e verduras também contribuem para a ingestão de líquidos.',
             ],
@@ -511,11 +448,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🪑 Se trabalha sentado:\n' +
-              '- Mantenha uma boa postura ao sentar, com costas apoiadas e pés no chão\n' +
-              '- Evite ficar muito tempo na mesma posição\n' +
-              '- Levante-se e se movimente ao longo do dia\n' +
-              '- Realize atividades sem sobrecarregar o corpo\n\n' +
+              '🪑 Se trabalha sentado:\n- Mantenha uma boa postura ao sentar, com costas apoiadas e pés no chão\n- Evite ficar muito tempo na mesma posição\n- Levante-se e se movimente ao longo do dia\n- Realize atividades sem sobrecarregar o corpo\n\n' +
               '💪 Segundo o Ministério da Saúde do Brasil, a prática regular de atividade física, incluindo exercícios de fortalecimento muscular, é essencial para prevenir dores e manter a saúde da coluna.',
             ],
           })),
@@ -526,11 +459,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '⚠️ Atenção: As quedas na terceira idade podem causar fraturas graves, mas pequenas adaptações em casa ajudam muito na prevenção.\n\n' +
-              '🏠 Manter a casa segura:\n' +
-              '- Retirar tapetes soltos, organizar fios e evitar pisos molhados\n' +
-              '- Garantir boa iluminação, principalmente à noite\n' +
-              '- Usar calçados firmes e antiderrapantes\n' +
-              '- Redobrar os cuidados no banheiro (barras de apoio e tapete antiderrapante)\n\n' +
+              '🏠 Manter a casa segura:\n- Retirar tapetes soltos, organizar fios e evitar pisos molhados\n- Garantir boa iluminação, principalmente à noite\n- Usar calçados firmes e antiderrapantes\n- Redobrar os cuidados no banheiro (barras de apoio e tapete antiderrapante)\n\n' +
               '💪 Manter a saúde em dia com atividade física, fortalecimento muscular e revisão da visão, audição e medicamentos\n\n' +
               '🏥 Procurar a unidade de saúde em caso de tontura ou dificuldade para andar\n\n' +
               'Fonte: Instituto Nacional de Traumatologia e Ortopedia (INTO)',
@@ -542,18 +471,9 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🧊 GELO (Compressa Fria):\n' +
-              '- Indicado para pancadas recentes (até 48h), inchaço, torções e inflamações\n' +
-              '- Ajuda a reduzir dor e edema\n' +
-              '- Como usar: 15 a 20 minutos, até 3 vezes ao dia\n\n' +
-              '🔥 CALOR (Compressa Quente):\n' +
-              '- Indicado para dores musculares, tensão e dores crônicas (aproximadamente 3 meses), como em dor nas costas ou torcicolo\n' +
-              '- Ajuda a relaxar a musculatura e melhorar a circulação\n' +
-              '- Como usar: 15 a 20 minutos, até 3 vezes ao dia\n\n' +
-              '⚠️ Atenção:\n' +
-              '- Não aplicar diretamente na pele\n' +
-              '- Não usar calor em locais inchados ou inflamados\n' +
-              '- Se não houver melhora, procure a unidade de saúde\n\n' +
+              '🧊 GELO (Compressa Fria):\n- Indicado para pancadas recentes (até 48h), inchaço, torções e inflamações\n- Ajuda a reduzir dor e edema\n- Como usar: 15 a 20 minutos, até 3 vezes ao dia\n\n' +
+              '🔥 CALOR (Compressa Quente):\n- Indicado para dores musculares, tensão e dores crônicas, como em dor nas costas ou torcicolo\n- Ajuda a relaxar a musculatura e melhorar a circulação\n- Como usar: 15 a 20 minutos, até 3 vezes ao dia\n\n' +
+              '⚠️ Atenção:\n- Não aplicar diretamente na pele\n- Não usar calor em locais inchados ou inflamados\n- Se não houver melhora, procure a unidade de saúde\n\n' +
               'Fonte: Ministério da Saúde e CUF Saúde',
             ],
           })),
@@ -578,19 +498,8 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '🩹 O que fazer em machucados leves em casa:\n\n' +
-              '- Lave o local com água corrente e sabão neutro (ou soro fisiológico)\n' +
-              '- Não use receitas caseiras (pasta de dente, pó de café, pomadas sem orientação)\n' +
-              '- Seque com um pano limpo e mantenha a área limpa\n' +
-              '- Cubra apenas se houver necessidade\n\n' +
-              'Fonte: Ministério da Saúde\n\n' +
-              '⚠️ Atenção: Procure a unidade de saúde se houver:\n' +
-              '- Corte profundo ou sangramento abundante\n' +
-              '- Contato com sujeira (terra, objetos enferrujados)\n' +
-              '- Presença de secreção, dor ou vermelhidão\n' +
-              '- Queimaduras\n' +
-              '- Picadas de animais peçonhentos\n' +
-              '- Feridas nos pés ou úlceras\n' +
-              '👉 Em caso de dúvida, procure a unidade básica de saúde.',
+              '- Lave o local com água corrente e sabão neutro (ou soro fisiológico)\n- Não use receitas caseiras (pasta de dente, pó de café, pomadas sem orientação)\n- Seque com um pano limpo e mantenha a área limpa\n- Cubra apenas se houver necessidade\n\nFonte: Ministério da Saúde\n\n' +
+              '⚠️ Atenção: Procure a unidade de saúde se houver:\n- Corte profundo ou sangramento abundante\n- Contato com sujeira (terra, objetos enferrujados)\n- Presença de secreção, dor ou vermelhidão\n- Queimaduras\n- Picadas de animais peçonhentos\n- Feridas nos pés ou úlceras\n👉 Em caso de dúvida, procure a unidade básica de saúde.',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -600,15 +509,9 @@ export const createChatflowMachine = (groqService: GroqService) =>
             responses: [
               ...context.responses,
               '🌡️ Febre é quando a temperatura corporal está igual ou acima de 37,5°C, em qualquer idade.\n\n' +
-              'Na maioria dos casos, você pode começar com cuidados em casa:\n' +
-              '- Hidrate-se\n- Descanse\n- Use roupas leves\n- Pode tomar banho morno\n\n' +
-              '🚫 O que evitar:\n' +
-              '- Evite tomar medicamentos sem orientação de um profissional de saúde\n' +
-              '- Não use álcool ou água gelada no corpo\n' +
-              '- Não se agasalhe em excesso\n\n' +
-              '🔴 Procure atendimento de saúde se houver:\n' +
-              '- Febre que persiste por 2 dias ou piora\n' +
-              '- Aparecimento de outros sintomas como: falta de ar, confusão ou sonolência excessiva, manchas pelo corpo, dor intensa ou piora do estado geral',
+              'Na maioria dos casos, você pode começar com cuidados em casa:\n- Hidrate-se\n- Descanse\n- Use roupas leves\n- Pode tomar banho morno\n\n' +
+              '🚫 O que evitar:\n- Evite tomar medicamentos sem orientação de um profissional de saúde\n- Não use álcool ou água gelada no corpo\n- Não se agasalhe em excesso\n\n' +
+              '🔴 Procure atendimento de saúde se houver:\n- Febre que persiste por 2 dias ou piora\n- Aparecimento de outros sintomas como: falta de ar, confusão ou sonolência excessiva, manchas pelo corpo, dor intensa ou piora do estado geral',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -633,13 +536,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🧘 Sentindo o coração acelerado ou muita ansiedade?\n\n' +
-              'Tente a respiração 4-7-8:\n' +
-              '- Inspire pelo nariz contando até 4\n' +
-              '- Segure o ar contando até 7\n' +
-              '- Solte lentamente pela boca contando até 8\n\n' +
-              'Repita 4 vezes, pois ao focar na sua respiração pode ajudar a acalmar seu corpo e mente.\n\n' +
-              '⚠️ Esta técnica auxilia o relaxamento e pode ajudar a reduzir momentos de ansiedade e estresse — mas não substitui acompanhamento profissional.',
+              '🧘 Sentindo o coração acelerado ou muita ansiedade?\n\nTente a respiração 4-7-8:\n- Inspire pelo nariz contando até 4\n- Segure o ar contando até 7\n- Solte lentamente pela boca contando até 8\n\nRepita 4 vezes, pois ao focar na sua respiração pode ajudar a acalmar seu corpo e mente.\n\n⚠️ Esta técnica auxilia o relaxamento — mas não substitui acompanhamento profissional.',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -648,12 +545,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '💙 Cuidar da saúde mental é essencial.\n\n' +
-              'Se você está com tristeza profunda, angústia ou pensamentos difíceis, além de procurar atendimento em uma UBS, você também pode contar com o Centro de Valorização da Vida pelo número 188.\n\n' +
-              '📞 CVV – Centro de Valorização da Vida\n' +
-              'Ligue 188 (24 horas por dia, 7 dias por semana)\n' +
-              'O atendimento é gratuito, sigiloso e funciona 24 horas por dia.\n\n' +
-              'Ou acesse: https://www.cvv.org.br',
+              '💙 Cuidar da saúde mental é essencial.\n\nSe você está com tristeza profunda, angústia ou pensamentos difíceis, além de procurar atendimento em uma UBS, você também pode contar com o Centro de Valorização da Vida pelo número 188.\n\n📞 CVV – Centro de Valorização da Vida\nLigue 188 (24 horas por dia, 7 dias por semana)\nO atendimento é gratuito, sigiloso e funciona 24 horas por dia.\n\nOu acesse: https://www.cvv.org.br',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -662,12 +554,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '😴 Para dormir melhor:\n\n' +
-              '- Tente manter horários regulares para dormir e acordar\n' +
-              '- Evite celular e TV pelo menos 1 hora antes de dormir\n' +
-              '- Evite grandes refeições e ingestão de chá preto, café, refrigerantes e energéticos à noite\n' +
-              '- Deixe o quarto escuro, silencioso e mais fresco possível\n' +
-              '- Use a cama apenas para dormir; evite trabalhar nela',
+              '😴 Para dormir melhor:\n\n- Tente manter horários regulares para dormir e acordar\n- Evite celular e TV pelo menos 1 hora antes de dormir\n- Evite grandes refeições e ingestão de chá preto, café, refrigerantes e energéticos à noite\n- Deixe o quarto escuro, silencioso e mais fresco possível\n- Use a cama apenas para dormir; evite trabalhar nela',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -677,14 +564,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '💪 Que bom que você quer saber sobre atividade física! Se movimentar faz muito bem para a saúde.\n\n' +
-              '⚠️ Atenção antes de praticar atividade física:\n' +
-              '- Procure um profissional de saúde para avaliar sua aptidão física\n' +
-              '- Se você não é ativo, comece com atividades de intensidade leve\n' +
-              '- Respeite os limites do seu corpo e interrompa a atividade se sentir dor no peito, tontura ou qualquer desconforto\n' +
-              '- Lembre-se de se hidratar bem durante o dia\n\n' +
-              'Para te orientar melhor, qual é a sua faixa etária?\n\n' +
-              '1) Criança (até 5 anos)\n2) Criança e adolescente (6 a 17 anos)\n3) Adulto\n4) Pessoa idosa',
+              '💪 Que bom que você quer saber sobre atividade física!\n\n⚠️ Atenção antes de praticar:\n- Procure um profissional de saúde para avaliar sua aptidão física\n- Se você não é ativo, comece com atividades de intensidade leve\n- Respeite os limites do seu corpo\n- Lembre-se de se hidratar bem durante o dia\n\nPara te orientar melhor, qual é a sua faixa etária?\n\n1) Criança (até 5 anos)\n2) Criança e adolescente (6 a 17 anos)\n3) Adulto\n4) Pessoa idosa',
             ],
           })),
           on: {
@@ -699,11 +579,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '👶 Criança (até 5 anos):\n\n' +
-              '- Crianças de até 1 ano: realizar pelo menos 30 minutos por dia, estimulando movimentos de barriga para baixo, que podem ser distribuídos ao longo do dia.\n\n' +
-              '- Crianças de 1 a 2 anos: praticar pelo menos 3 horas por dia de atividades físicas. Exemplos: engatinhar, rastejar, rolar, sentar e levantar.\n\n' +
-              '- Crianças de 3 a 5 anos: realizar pelo menos 3 horas de atividades físicas por dia. Atividades como natação, ginástica, artes marciais, danças e brincadeiras ativas no recreio escolar.\n\n' +
-              'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
+              '👶 Criança (até 5 anos):\n\n- Crianças de até 1 ano: realizar pelo menos 30 minutos por dia, estimulando movimentos de barriga para baixo.\n\n- Crianças de 1 a 2 anos: praticar pelo menos 3 horas por dia. Exemplos: engatinhar, rastejar, rolar, sentar e levantar.\n\n- Crianças de 3 a 5 anos: realizar pelo menos 3 horas de atividades físicas por dia. Atividades como natação, ginástica, artes marciais, danças e brincadeiras ativas.\n\nFonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -712,11 +588,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🧒 Criança e Adolescente (6 a 17 anos):\n\n' +
-              '- Praticar pelo menos 60 minutos por dia — dê preferência a atividades que façam a respiração e os batimentos do coração aumentarem. Exemplos: Caminhar, correr, nadar, pedalar, jogar futebol, jogar vôlei.\n\n' +
-              '- Incluir pelo menos 3 dias na semana para Fortalecimento muscular e ósseo (saltar, pular corda, puxar ou empurrar - cabo de guerra)\n\n' +
-              '- A cada 1h, movimente-se 5 minutos — reduza o tempo sentado ou deitado usando o celular ou assistindo TV.\n\n' +
-              'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
+              '🧒 Criança e Adolescente (6 a 17 anos):\n\n- Praticar pelo menos 60 minutos por dia. Exemplos: Caminhar, correr, nadar, pedalar, jogar futebol, jogar vôlei.\n\n- Incluir pelo menos 3 dias na semana para Fortalecimento muscular e ósseo (saltar, pular corda, cabo de guerra)\n\n- A cada 1h, movimente-se 5 minutos.\n\nFonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -725,11 +597,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '🧑 Adulto:\n\n' +
-              '- Praticar pelo menos 150 minutos por semana de (moderada) ou pelo menos 75 minutos por semana (vigorosa)\n\n' +
-              '- Incluir pelo menos 2 dias na semana — Fortalecimento muscular (musculação e exercícios com peso do corpo)\n\n' +
-              '- A cada 1h, movimente-se 5 minutos — reduza o tempo sentado ou deitado usando o celular ou assistindo TV.\n\n' +
-              'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
+              '🧑 Adulto:\n\n- Praticar pelo menos 150 minutos por semana (moderada) ou 75 minutos por semana (vigorosa)\n\n- Incluir pelo menos 2 dias na semana de Fortalecimento muscular\n\n- A cada 1h, movimente-se 5 minutos.\n\nFonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -738,14 +606,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '👴 Pessoa Idosa (60+):\n\n' +
-              '- Praticar pelo menos 150 minutos por semana de atividade física moderada (caminhada, hidroginástica) ou pelo menos 75 minutos por semana de atividade mais intensa (corrida, ciclismo).\n\n' +
-              '- Incluir 2 a 3 vezes por semana em dias alternados — Exercícios para fortalecimento muscular e equilíbrio\n\n' +
-              '- A cada 1h, levante-se e movimente-se por 5 minutos.\n\n' +
-              '- Atividades sugeridas: Caminhadas, musculação, hidroginástica, alongamentos ou dança, jogos ativos, cuidar das plantas, passear com animal de estimação.\n\n' +
-              '- Respeitar os próprios limites e adaptar a intensidade conforme a condição física.\n' +
-              '- Priorizar equilíbrio, coordenação e força.\n\n' +
-              'Fonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
+              '👴 Pessoa Idosa (60+):\n\n- Praticar pelo menos 150 minutos por semana de atividade física moderada (caminhada, hidroginástica) ou 75 minutos de atividade intensa.\n\n- Incluir 2 a 3 vezes por semana exercícios de fortalecimento muscular e equilíbrio.\n\n- A cada 1h, levante-se e movimente-se por 5 minutos.\n\n- Atividades sugeridas: caminhadas, musculação, hidroginástica, alongamentos, jogos ativos, cuidar das plantas.\n\n- Respeitar os próprios limites e priorizar equilíbrio, coordenação e força.\n\nFonte: Ministério da Saúde – Guia de Atividade Física para População Brasileira',
             ],
           })),
           always: { target: 'still_need_help' },
@@ -755,8 +616,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '❤️ Que bom que você quer saber sobre doação de sangue! Qual orientação deseja receber?\n\n' +
-              '1) Quem pode doar?\n2) Onde doar?\n3) Como funciona a doação?\n4) Cuidados antes da doação\n5) Impedimentos temporários',
+              '❤️ Que bom que você quer saber sobre doação de sangue! Qual orientação deseja receber?\n\n1) Quem pode doar?\n2) Onde doar?\n3) Como funciona a doação?\n4) Cuidados antes da doação\n5) Impedimentos temporários',
             ],
           })),
           on: {
@@ -772,14 +632,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '1️⃣ Quem pode doar?\n\n' +
-              '- Pessoas entre 16 e 69 anos\n' +
-              '- Menores de 18 anos precisam de autorização do responsável\n' +
-              '- Pesar mais de 50 kg\n' +
-              '- Estar em boas condições de saúde\n' +
-              '- Estar alimentado (evite alimentos gordurosos nas 4h que antecedem) e descansado\n' +
-              '- Apresentar documento oficial com foto\n' +
-              '- Homens podem doar sangue a cada 3 meses, até 4 vezes ao ano. Já as mulheres podem doar a cada 4 meses, até 3 vezes ao ano.',
+              '1️⃣ Quem pode doar?\n\n- Pessoas entre 16 e 69 anos\n- Menores de 18 anos precisam de autorização do responsável\n- Pesar mais de 50 kg\n- Estar em boas condições de saúde\n- Estar alimentado (evite alimentos gordurosos nas 4h que antecedem) e descansado\n- Apresentar documento oficial com foto\n- Homens: a cada 3 meses, até 4 vezes ao ano. Mulheres: a cada 4 meses, até 3 vezes ao ano.',
             ],
           })),
           always: { target: 'quick_guidance_doacao_retorno' },
@@ -788,11 +641,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '2️⃣ Onde doar?\n\n' +
-              '🏥 HEMOPE - PETROLINA\n' +
-              'Rua Pacífico da Luz, s/n – Centro, Petrolina-PE\n\n' +
-              '🕐 Horário de Atendimento:\nSegunda a sexta-feira 7h30 às 11h30\n\n' +
-              '📞 Telefone: (87) 3182-5866 | (87) 3866-6601',
+              '2️⃣ Onde doar?\n\n🏥 HEMOPE - PETROLINA\nRua Pacífico da Luz, s/n – Centro, Petrolina-PE\n\n🕐 Horário de Atendimento:\nSegunda a sexta-feira 7h30 às 11h30\n\n📞 Telefone: (87) 3182-5866 | (87) 3866-6601',
             ],
           })),
           always: { target: 'quick_guidance_doacao_retorno' },
@@ -801,12 +650,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '3️⃣ Como funciona a doação?\n\n' +
-              '- Primeiro é realizado cadastro e triagem\n' +
-              '- Depois ocorre entrevista e avaliação clínica\n' +
-              '- A coleta dura cerca de 10 a 15 minutos\n' +
-              '- São doados aproximadamente 450 ml de sangue\n' +
-              '- Todo material utilizado é descartável e seguro',
+              '3️⃣ Como funciona a doação?\n\n- Primeiro é realizado cadastro e triagem\n- Depois ocorre entrevista e avaliação clínica\n- A coleta dura cerca de 10 a 15 minutos\n- São doados aproximadamente 450 ml de sangue\n- Todo material utilizado é descartável e seguro',
             ],
           })),
           always: { target: 'quick_guidance_doacao_retorno' },
@@ -815,11 +659,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '4️⃣ Cuidados antes da doação:\n\n' +
-              '- Beba bastante líquido nas 24h antes\n' +
-              '- Faça refeições leves e evite alimentos gordurosos nas últimas horas\n' +
-              '- Não ingerir bebida alcoólica nas últimas 12h\n' +
-              '- Durma bem na noite anterior',
+              '4️⃣ Cuidados antes da doação:\n\n- Beba bastante líquido nas 24h antes\n- Faça refeições leves e evite alimentos gordurosos nas últimas horas\n- Não ingerir bebida alcoólica nas últimas 12h\n- Durma bem na noite anterior',
             ],
           })),
           always: { target: 'quick_guidance_doacao_retorno' },
@@ -828,14 +668,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '5️⃣ Impedimentos temporários:\n\n' +
-              '- Gripe, resfriado ou processo alérgico — aguardar 7 dias após desaparecimento dos sintomas\n' +
-              '- Uso de antibiótico nos últimos 15 dias\n' +
-              '- Gravidez ou suspeita de gestação\n' +
-              '- Amamentação antes de 12 meses após o parto\n' +
-              '- Tatuagem, piercing ou micropigmentação nos últimos 12 meses\n' +
-              '- Piercing oral ou genital sem 12 meses da retirada\n' +
-              '- Ter se exposto a situações de risco para IST/AIDS.',
+              '5️⃣ Impedimentos temporários:\n\n- Gripe, resfriado ou processo alérgico — aguardar 7 dias após desaparecimento dos sintomas\n- Uso de antibiótico nos últimos 15 dias\n- Gravidez ou suspeita de gestação\n- Amamentação antes de 12 meses após o parto\n- Tatuagem, piercing ou micropigmentação nos últimos 12 meses\n- Piercing oral ou genital sem 12 meses da retirada\n- Ter se exposto a situações de risco para IST/AIDS.',
             ],
           })),
           always: { target: 'quick_guidance_doacao_retorno' },
@@ -844,11 +677,7 @@ export const createChatflowMachine = (groqService: GroqService) =>
           entry: assign(({ context }) => ({
             responses: [
               ...context.responses,
-              '❤️ Doar sangue salva vidas!\n\n' +
-              'Deseja receber outra orientação?\n\n' +
-              '1) Voltar ao menu - Doação de Sangue\n' +
-              '2) Voltar ao menu - Orientações completa\n' +
-              '3) Não - Encerrar',
+              '❤️ Doar sangue salva vidas!\n\nDeseja receber outra orientação?\n\n1) Voltar ao menu - Doação de Sangue\n2) Voltar ao menu - Orientações completa\n3) Não - Encerrar',
             ],
           })),
           on: {
@@ -859,10 +688,97 @@ export const createChatflowMachine = (groqService: GroqService) =>
           },
         },
 
+        farmacia_flow: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💊 Você escolheu Farmácia! O que deseja saber?\n\n1) Horário e dias de funcionamento\n2) Endereço\n3) Lista de medicamentos\n4) Orientações',
+            ],
+          })),
+          on: {
+            FARMACIA_HORARIO:      'farmacia_horario',
+            FARMACIA_ENDERECO:     'farmacia_endereco',
+            FARMACIA_MEDICAMENTOS: 'farmacia_medicamentos',
+            FARMACIA_ORIENTACOES:  'farmacia_orientacoes',
+            USER_INPUT:            'farmacia_flow',
+          },
+        },
+        farmacia_horario: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '🕐 Horário e dias de funcionamento:\n\n' +
+              '🏥 UBS:\nSegunda a sexta-feira: 8h às 12h e 13h às 17h\n\n' +
+              '💊 Farmácia Popular:\nSegunda a sexta-feira: 8h às 18h | Sábado: 8h às 14h\n\n' +
+              '💊 Farmácia da Família:\nSegunda a sexta-feira: 7h às 19h\n\n' +
+              '💊 Farmácia do Estado:\nSegunda a sexta-feira: 7h às 17h\n\n' +
+              '⚠️ Atenção: A Farmácia do Estado pode depender de agendamento! A Farmácia Popular e a Farmácia da Família geralmente não precisam (ordem de chegada).',
+            ],
+          })),
+          always: { target: 'farmacia_retorno' },
+        },
+        farmacia_endereco: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '📍 Endereços:\n\n' +
+              '🏥 UBS (conforme seu cadastro):\n' +
+              UBS_PETROLINA.join('\n') +
+              '\n\n💊 Farmácia Popular:\nR. Souza Filho, 600 – Centro, Petrolina-PE\n\n' +
+              '💊 Farmácia da Família:\nAv. Cardoso de Sá, 1200 – Bairro Jardim Aeroporto, Petrolina-PE\n\n' +
+              '💊 Farmácia do Estado (SEFAZ):\nAv. Agamenon Magalhães, s/n – Centro, Petrolina-PE\n\n' +
+              '📌 Para localizar a farmácia mais próxima, acesse o aplicativo Meu SUS Digital.',
+            ],
+          })),
+          always: { target: 'farmacia_retorno' },
+        },
+        farmacia_medicamentos: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '💊 Lista de medicamentos por farmácia:\n\n' +
+              '🏥 UBS e Farmácia Popular:\nMedicamentos básicos como: anti-hipertensivos, antidiabéticos, antiácidos, analgésicos, antibióticos comuns, anticoncepcionais, entre outros.\n\n' +
+              '💊 Farmácia da Família:\nLista mensal de medicamentos essenciais disponibilizada pelo Ministério da Saúde, incluindo medicamentos para doenças crônicas.\n\n' +
+              '💊 Farmácia do Estado:\nMedicamentos de alto custo e uso contínuo para doenças específicas (oncologia, HIV, hepatite, entre outros).\n\n' +
+              '⚠️ Obs.: Não é fornecido o estoque, apenas a lista dos medicamentos.',
+            ],
+          })),
+          always: { target: 'farmacia_retorno' },
+        },
+        farmacia_orientacoes: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              '📋 Orientações sobre medicamentos:\n\n' +
+              '- Não utilize medicamentos por conta própria. Use apenas com prescrição de médico ou enfermeiro.\n' +
+              '- Verifique sempre o prazo de validade dos medicamentos antes de usar.\n' +
+              '- Se tiver algum sintoma diferente, procure atendimento na unidade de saúde.\n' +
+              '- Siga corretamente as orientações sobre o modo de uso e a dose indicada.\n' +
+              '- Evite consumir bebidas alcoólicas durante o uso de medicamentos.\n\n' +
+              '🔔 Lembrete:\nLeve sempre a **receita atualizada** e um **documento de identificação (CPF ou Cartão do SUS)** ao procurar atendimento.',
+            ],
+          })),
+          always: { target: 'farmacia_retorno' },
+        },
+        farmacia_retorno: {
+          entry: assign(({ context }) => ({
+            responses: [
+              ...context.responses,
+              'Deseja saber mais alguma coisa?\n\n1) Voltar ao menu - Farmácia\n2) Voltar ao menu principal\n3) Não - Encerrar',
+            ],
+          })),
+          on: {
+            VOLTAR_FARMACIA: 'farmacia_flow',
+            VOLTAR_MENU:     'menu',
+            ENCERRAR:        'end_session',
+            USER_INPUT:      'farmacia_retorno',
+          },
+        },
+
         still_need_help: {
           entry: assign(({ context }) => ({
-            responses: [...context.responses, `Há mais algo em que eu possa ajudar?`],
-            response: `Há mais algo em que eu possa ajudar?`,
+            responses: [...context.responses, 'Há mais algo em que eu possa ajudar?'],
+            response: 'Há mais algo em que eu possa ajudar?',
           })),
           on: {
             YES: 'menu',
@@ -881,33 +797,14 @@ export const createChatflowMachine = (groqService: GroqService) =>
         end_session: {
           type: 'final',
           entry: assign(({ context }) => ({
-            responses: [...context.responses, `Certo! Obrigada por usar o assistente virtual do SUS!`],
-            response: `Certo! Obrigada por usar o assistente virtual do SUS!`,
+            responses: [...context.responses, 'Certo! Obrigada por usar o assistente virtual do SUS!'],
+            response: 'Certo! Obrigada por usar o assistente virtual do SUS!',
           })),
         },
       },
     },
     {
       actors: {
-        askLlamaForSymptomSeverity: fromPromise(
-          async ({ input }: { input: string }) => {
-            try {
-              if (!input) throw new Error('Input inválido');
-              const prompt: ChatMessage[] = [
-                {
-                  role: 'system',
-                  content: 'Analise os sintomas e classifique como leves ou graves. Retorne apenas: {"response": "Sua resposta", "nextState": "health_issue_mild_symptoms" ou "health_issue_severe_symptoms"}',
-                },
-                { role: 'user', content: input },
-              ];
-              const rawResponse = await groqService.askGroq(prompt);
-              const parsed = JSON.parse(rawResponse) as { response: string; nextState: string };
-              return parsed.nextState;
-            } catch (error) {
-              return { response: 'Erro na análise. Tente novamente.', nextState: 'error' };
-            }
-          },
-        ),
         mapAppointment: fromPromise(async ({ input }: { input: number }) => {
           try {
             let typeOfAppointment: string | null;
